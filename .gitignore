@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual Environment
+EDAI_SEM_3_PY311/
+venv/
+.venv/
+
+# Dataset
+data/
+output_faces/
+fine_tune_data/
+
+# Model weights
+models/*.pth
+models/*.pt
+
+# Node
+website/verify-deepfake/node_modules/
+website/verify-deepfake/dist/
+
+# Logs
+*.log
+
+# VSCode
+.vscode/
+
+# Temp files
+temp*
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
