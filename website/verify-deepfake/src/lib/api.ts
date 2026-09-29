@@ -10,14 +10,14 @@
 const DEFAULT_RENDER_URL = "https://deepguard-backend-ug4e.onrender.com";
 const DEFAULT_LOCAL_URL = "http://127.0.0.1:8000";
 
-// Prioritize explicit env var, then user's Render deployment, then localhost
+// Prioritize explicit env var, then default Render cloud deployment, then localhost
 export const getCandidateUrls = (): string[] => {
   const envUrl = import.meta.env.VITE_API_URL;
   const urls: string[] = [];
 
   if (envUrl) {
-    const formattedEnv = envUrl.replace(/\/+$/, "");
-    if (!urls.includes(formattedEnv)) urls.push(formattedEnv);
+    const cleanedEnv = envUrl.replace(/\/+$/, "");
+    if (!urls.includes(cleanedEnv)) urls.push(cleanedEnv);
   }
   
   if (!urls.includes(DEFAULT_RENDER_URL)) {
@@ -44,8 +44,12 @@ export async function analyzeMediaWithFallback(formData: FormData): Promise<{ da
       console.info(`[DeepGuard Engine] Attempting inference connection at: ${baseUrl}/analyze`);
       
       const controller = new AbortController();
-      // Generous timeout for free tier spinup / video processing
-      const timeoutId = setTimeout(() => controller.abort(), 90000);
+      // 2-minute timeout to allow for video upload + neural inference + Render cold-start
+      const timeoutId = setTimeout(() => {
+        try {
+          controller.abort();
+        } catch (_) {}
+      }, 120000);
 
       const response = await fetch(`${baseUrl}/analyze`, {
         method: "POST",
