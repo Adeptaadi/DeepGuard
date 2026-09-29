@@ -34,6 +34,16 @@ def image_to_base64(pil_image):
     pil_image.save(buffered, format="JPEG")
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
+@app.get("/")
+@app.get("/health")
+def health_check():
+    return {
+        "status": "online",
+        "service": "DeepGuard AI Forensic Backend",
+        "architecture": "Dual-CNN Ensemble (XceptionNet + EfficientNet-B0)",
+        "version": "2.4"
+    }
+
 @app.post("/analyze")
 async def analyze_video_endpoint(file: UploadFile = File(...)):
     start_time = time.time()

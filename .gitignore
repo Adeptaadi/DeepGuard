@@ -13,8 +13,9 @@ output_faces/
 fine_tune_data/
 
 # Model weights
-models/*.pth
-models/*.pt
+models/*
+!models/deepfake_detector_xception.pth
+!models/deepfake_detector_efficientnet.pth
 
 # Node
 website/verify-deepfake/node_modules/
