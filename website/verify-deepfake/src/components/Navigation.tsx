@@ -3,7 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Shield, Cpu, Activity, Menu, X, Terminal, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const Navigation = () => {
+interface NavigationProps {
+  engineStatus?: "connecting" | "online" | "ready";
+}
+
+const Navigation = ({ engineStatus = "connecting" }: NavigationProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
@@ -15,6 +19,8 @@ const Navigation = () => {
       element.scrollIntoView({ behavior: "smooth" });
     }
   };
+
+  const isOnline = engineStatus === "online";
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-panel border-b border-border/60">
@@ -39,11 +45,13 @@ const Navigation = () => {
             {/* Live Model Status Badge (Desktop) */}
             <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/60 border border-border/80 text-[11px] font-mono">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+                <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", isOnline ? "bg-emerald-400" : "bg-amber-400")}></span>
+                <span className={cn("relative inline-flex rounded-full h-2 w-2", isOnline ? "bg-emerald-400" : "bg-amber-400")}></span>
               </span>
               <span className="text-muted-foreground">Neural Engine:</span>
-              <span className="text-accent font-medium">CUDA Active</span>
+              <span className={cn("font-medium", isOnline ? "text-emerald-400" : "text-amber-400")}>
+                {isOnline ? "Render Cloud Active" : "Auto-Connecting..."}
+              </span>
             </div>
           </div>
 
@@ -111,9 +119,11 @@ const Navigation = () => {
         )}>
           <div className="space-y-3 pt-3 border-t border-border/60">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-secondary/40 text-xs font-mono mb-2">
-              <span className="h-2 w-2 rounded-full bg-success"></span>
+              <span className={cn("h-2 w-2 rounded-full", isOnline ? "bg-emerald-400" : "bg-amber-400")}></span>
               <span className="text-muted-foreground">Neural Engine:</span>
-              <span className="text-accent font-medium">CUDA Active</span>
+              <span className={cn("font-medium", isOnline ? "text-emerald-400" : "text-amber-400")}>
+                {isOnline ? "Render Cloud Active" : "Connecting..."}
+              </span>
             </div>
             <button 
               onClick={() => scrollTo("detector")} 

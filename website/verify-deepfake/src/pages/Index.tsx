@@ -81,7 +81,7 @@
 // export default Index;
 
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import FileUpload from "@/components/FileUpload";
@@ -89,6 +89,7 @@ import AnalysisResults from "@/components/AnalysisResults";
 import HowItWorks from "@/components/HowItWorks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { warmUpBackend } from "@/lib/api";
 import { 
   RefreshCw, 
   Eye, 
@@ -106,6 +107,18 @@ import {
 
 const Index = () => {
   const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [engineStatus, setEngineStatus] = useState<"connecting" | "online" | "ready">("connecting");
+
+  // Instant wake-up call to Render backend when website opens
+  useEffect(() => {
+    warmUpBackend().then((res) => {
+      if (res.status === "online") {
+        setEngineStatus("online");
+      } else {
+        setEngineStatus("ready");
+      }
+    });
+  }, []);
 
   const handleAnalysisComplete = (data: any) => {
     setAnalysisResult(data);
@@ -117,7 +130,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col selection:bg-accent/30 selection:text-accent">
-      <Navigation />
+      <Navigation engineStatus={engineStatus} />
       
       <main className="flex-grow">
         {/* Hero Section */}

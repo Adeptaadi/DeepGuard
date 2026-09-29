@@ -3,7 +3,7 @@
  * 
  * Strategy:
  * 1. Checks configured environment variable (VITE_API_URL / VITE_RENDER_API_URL).
- * 2. Primary: Render cloud backend (e.g., https://deepguard-backend.onrender.com or custom domain).
+ * 2. Primary: Render cloud backend (https://deepguard-backend-ug4e.onrender.com).
  * 3. Fallback: Localhost / local development engine (http://127.0.0.1:8000).
  */
 
@@ -79,4 +79,37 @@ export async function analyzeMediaWithFallback(formData: FormData): Promise<{ da
     errors.map((e) => `• ${e}`).join("\n") +
     `\n\nIf using Render free tier, the instance might be waking up (allow 30-45s) or ensure your local backend is running with 'python -m uvicorn backend.main:app'.`
   );
+}
+
+/**
+ * Wakes up the Render backend immediately when the user lands on the website.
+ * This ensures any cold-start latency is resolved in the background while the user is browsing or uploading.
+ */
+export async function warmUpBackend(): Promise<{ status: "online" | "waking_up"; url?: string }> {
+  const candidateUrls = getCandidateUrls();
+  
+  for (const baseUrl of candidateUrls) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        try { controller.abort(); } catch (_) {}
+      }, 8000);
+
+      const res = await fetch(`${baseUrl}/health`, {
+        method: "GET",
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        console.info(`[DeepGuard Engine] Instant Warmup Success from ${baseUrl}:`, data);
+        return { status: "online", url: baseUrl };
+      }
+    } catch (_) {
+      // Warmup ping quietly attempts candidates in background
+    }
+  }
+  return { status: "waking_up" };
 }
