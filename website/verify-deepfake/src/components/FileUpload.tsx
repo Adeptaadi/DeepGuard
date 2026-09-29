@@ -170,6 +170,7 @@ import {
   Activity
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { analyzeMediaWithFallback } from "@/lib/api";
 
 interface FileUploadProps {
   onAnalysisComplete: (data: any) => void;
@@ -177,7 +178,7 @@ interface FileUploadProps {
 }
 
 const ANALYSIS_STAGES = [
-  { label: "Decoding video frames & sampling sequence...", progress: 20, icon: FileVideo },
+  { label: "Connecting to Neural Inference Engine (Render Cloud / Local)...", progress: 20, icon: FileVideo },
   { label: "Running MTCNN face detection with 80px boundary margin...", progress: 45, icon: Eye },
   { label: "Dual-CNN Inference: XceptionNet (Spatial) + EfficientNet (Texture)...", progress: 70, icon: Cpu },
   { label: "Computing temporal streaks & synthesizing Grad-CAM heatmaps...", progress: 92, icon: Activity }
@@ -271,26 +272,17 @@ const FileUpload = ({ onAnalysisComplete, className }: FileUploadProps) => {
     formData.append("file", selectedFile);
 
     try {
-      // Connect to Python FastAPI Backend (supports VITE_API_URL env var on Vercel)
-      const apiBaseUrl = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-      const response = await fetch(`${apiBaseUrl}/analyze`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Analysis failed. Ensure FastAPI backend is active.");
-      }
-
-      const data = await response.json();
+      // Connect to Primary Render Cloud Backend with Localhost Fallback
+      const { data, usedUrl } = await analyzeMediaWithFallback(formData);
+      console.log(`[DeepGuard] Analysis finished successfully via ${usedUrl}`);
+      
       setSimulatedProgress(100);
       setTimeout(() => {
         onAnalysisComplete(data);
       }, 400);
     } catch (err: any) {
       console.error(err);
-      setError("Failed to connect to backend engine (http://127.0.0.1:8000). Please ensure 'python -m uvicorn backend.main:app' is running.");
+      setError(err.message || "Failed to connect to forensic backend. Please ensure the Render backend is live or localhost server is running.");
     } finally {
       setIsAnalyzing(false);
     }
