@@ -341,7 +341,7 @@ const FileUpload = ({ onAnalysisComplete, className }: FileUploadProps) => {
             >
               <input
                 type="file"
-                accept="video/*,image/*,.mp4,.avi,.mov,.webm,.mkv,.jpg,.png"
+                accept=".mp4,.avi,.mov,.webm,.mkv,.jpg,.jpeg,.png"
                 onChange={handleChange}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
               />

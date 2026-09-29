@@ -109,15 +109,27 @@ const Index = () => {
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [engineStatus, setEngineStatus] = useState<"connecting" | "online" | "ready">("connecting");
 
-  // Instant wake-up call to Render backend when website opens
+  // Instant wake-up call + background polling until Render is online
   useEffect(() => {
-    warmUpBackend().then((res) => {
+    let intervalId: NodeJS.Timeout;
+    
+    const checkHealth = async () => {
+      const res = await warmUpBackend();
       if (res.status === "online") {
         setEngineStatus("online");
-      } else {
-        setEngineStatus("ready");
+        if (intervalId) clearInterval(intervalId);
       }
-    });
+    };
+
+    // Immediate check
+    checkHealth();
+
+    // Poll every 4 seconds until connected
+    intervalId = setInterval(checkHealth, 4000);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   const handleAnalysisComplete = (data: any) => {
