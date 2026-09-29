@@ -76,13 +76,15 @@ def predict_frame_ensemble(pil_image):
     
     return label, confidence, img_tensor, face_img
 
+import gc
+
 def predict_video(video_path, sequence_length=3):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened(): return "Error", {"message": "Could not open video"}
     
     fps = cap.get(cv2.CAP_PROP_FPS)
+    if not fps or fps <= 0: fps = 25.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    video_duration = total_frames / fps if fps > 0 else 0
     
     fake_frame_count = 0
     processed_frames = 0
@@ -92,23 +94,30 @@ def predict_video(video_path, sequence_length=3):
     
     # Evidence Collection Logic
     evidence_frames = []
-    frames_per_second = int(fps)
-    next_capture_second = 0  # We want to capture at 0s, 1s, 2s, etc.
+    next_capture_second = 0
     
-    # Setup GradCAM
-    target_layer = model_xc.act4 if hasattr(model_xc, 'act4') else model_xc.conv4
-    cam = GradCAM(model_xc, target_layer)
+    # Setup GradCAM lazily
+    target_layer = getattr(model_xc, 'act4', None) or getattr(model_xc, 'conv4', None)
+    cam = GradCAM(model_xc, target_layer) if target_layer is not None else None
+    
+    # Sample every 10th frame to keep memory & CPU time very lean for cloud hosting
+    sample_interval = max(5, int(fps // 3)) if fps else 8
+    max_frames_to_process = 60 # Cap at 60 analyzed frames max for fast response & 0 memory overflow
     
     frame_idx = 0
     while True:
         ret, frame = cap.read()
-        if not ret: break
+        if not ret or processed_frames >= max_frames_to_process:
+            break
         
-        # Calculate current time in seconds
         current_time_sec = frame_idx / fps
         
-        # Analyze every 5th frame for general stats
-        if frame_idx % 5 == 0:
+        if frame_idx % sample_interval == 0:
+            # Resize frame if exceptionally large to conserve RAM
+            h, w = frame.shape[:2]
+            if w > 1280 or h > 720:
+                frame = cv2.resize(frame, (1280, int(h * (1280 / w))))
+                
             pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             label, conf, tensor, crop = predict_frame_ensemble(pil_img)
             
@@ -119,9 +128,7 @@ def predict_video(video_path, sequence_length=3):
                     fake_frame_count += 1
                     consecutive_fake_streak += 1
                     
-                    # --- CAPTURE EVIDENCE (1 PER SECOND) ---
-                    # Logic: If this frame is fake AND we crossed a new second marker
-                    if current_time_sec >= next_capture_second:
+                    if current_time_sec >= next_capture_second and cam is not None and len(evidence_frames) < 6:
                         try:
                             heatmap = cam.generate_heatmap(tensor, target_class_idx=0)
                             overlay = overlay_heatmap(crop, heatmap)
@@ -130,10 +137,9 @@ def predict_video(video_path, sequence_length=3):
                                 "conf": conf,
                                 "time": f"{int(current_time_sec)}s"
                             })
-                            # Increment target so we don't capture again until the next second
                             next_capture_second += 1
                         except Exception as e:
-                            print(f"GradCAM Error: {e}")
+                            print(f"[WARN] GradCAM Error: {e}")
 
                     if consecutive_fake_streak >= sequence_length:
                         seconds = frame_idx / fps if fps else 0
@@ -142,17 +148,23 @@ def predict_video(video_path, sequence_length=3):
                 else:
                     max_fake_streak = max(max_fake_streak, consecutive_fake_streak)
                     consecutive_fake_streak = 0
+            
+            # Explicit reference cleanup
+            del pil_img, tensor, crop
+            
         frame_idx += 1
+        
     cap.release()
+    gc.collect()
 
     fake_ratio = (fake_frame_count / processed_frames) * 100 if processed_frames > 0 else 0
     final_prediction = "FAKE" if fake_ratio > 30.0 else "REAL"
 
     return final_prediction, {
         "fake_ratio": f"{fake_ratio:.2f}%",
-        "max_consecutive_fakes": max_fake_streak * 5, 
+        "max_consecutive_fakes": max_fake_streak * sample_interval, 
         "timestamps": suspicious_timestamps,
-        "evidence": evidence_frames[:10] # Limit to 10 frames max just in case
+        "evidence": evidence_frames[:6]
     }
 
 def predict_frame_tta(pil_image):
