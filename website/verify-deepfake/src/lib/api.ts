@@ -8,8 +8,9 @@
  */
 
 const DEFAULT_RENDER_URL = "https://deepguard-backend-ug4e.onrender.com";
+const DEFAULT_LOCAL_URL = "http://127.0.0.1:8000";
 
-// Only target Cloud Render Backend
+// Primary: Render Cloud -> Fallback: Localhost
 export const getCandidateUrls = (): string[] => {
   const envUrl = import.meta.env.VITE_API_URL;
   const urls: string[] = [];
@@ -21,6 +22,10 @@ export const getCandidateUrls = (): string[] => {
   
   if (!urls.includes(DEFAULT_RENDER_URL)) {
     urls.push(DEFAULT_RENDER_URL);
+  }
+
+  if (!urls.includes(DEFAULT_LOCAL_URL)) {
+    urls.push(DEFAULT_LOCAL_URL);
   }
 
   return urls;
