@@ -7,16 +7,17 @@
  * 3. Fallback: Localhost / local development engine (http://127.0.0.1:8000).
  */
 
-const DEFAULT_RENDER_URL = "https://deepguard-backend.onrender.com";
+const DEFAULT_RENDER_URL = "https://deepguard-backend-ug4e.onrender.com";
 const DEFAULT_LOCAL_URL = "http://127.0.0.1:8000";
 
-// Prioritize explicit env var, then default Render cloud deployment, then localhost
+// Prioritize explicit env var, then user's Render deployment, then localhost
 export const getCandidateUrls = (): string[] => {
   const envUrl = import.meta.env.VITE_API_URL;
   const urls: string[] = [];
 
   if (envUrl) {
-    urls.push(envUrl.replace(/\/+$/, ""));
+    const formattedEnv = envUrl.replace(/\/+$/, "");
+    if (!urls.includes(formattedEnv)) urls.push(formattedEnv);
   }
   
   if (!urls.includes(DEFAULT_RENDER_URL)) {
