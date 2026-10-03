@@ -28,12 +28,10 @@ if os.path.exists(PATH_EFFNET):
     model_ef.load_state_dict(torch.load(PATH_EFFNET, map_location=DEVICE))
 model_ef.to(DEVICE).eval()
 
-# --- PREPROCESSING ---
-mtcnn = MTCNN(
-    image_size=299, margin=80, min_face_size=40,
-    keep_all=False, select_largest=True,
-    device=DEVICE, post_process=False 
-)
+from utils.face_detector import HybridFaceDetector
+
+# --- HYBRID FACE DETECTOR (YOLOv8-Face Primary + MTCNN Fallback) ---
+face_detector = HybridFaceDetector(device=DEVICE)
 
 base_transform = transforms.Compose([
     transforms.Resize((299, 299)),
@@ -42,22 +40,9 @@ base_transform = transforms.Compose([
 ])
 
 def predict_frame_ensemble(pil_image):
-    if pil_image.mode != 'RGB':
-        pil_image = pil_image.convert('RGB')
-        
-    boxes, _ = mtcnn.detect(pil_image)
-    if boxes is None: return "No face detected", 0.0
-
-    box = boxes[0]
-    box = [max(0, b) for b in box]
-    
-    width = box[2] - box[0]
-    height = box[3] - box[1]
-    ratio = width / height if height > 0 else 0
-    if ratio < 0.5 or ratio > 2.0: return "Bad Crop", 0.0
-
-    face_img = pil_image.crop((box[0], box[1], box[2], box[3]))
-    if face_img.size[0] == 0 or face_img.size[1] == 0: return "No face detected", 0.0
+    face_img, detector_status = face_detector.detect_face(pil_image)
+    if face_img is None:
+        return detector_status, 0.0, None, None
 
     img_tensor = base_transform(face_img).unsqueeze(0).to(DEVICE)
 
@@ -121,7 +106,7 @@ def predict_video(video_path, sequence_length=3):
             pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             label, conf, tensor, crop = predict_frame_ensemble(pil_img)
             
-            if label not in ["Bad Crop", "No face detected"]:
+            if tensor is not None and label in ["FAKE", "REAL"]:
                 processed_frames += 1
                 
                 if label == "FAKE" and conf > 60.0:
