@@ -31,17 +31,23 @@ export const getCandidateUrls = (): string[] => {
   return urls;
 };
 
+export type ProgressCallback = (progress: number, stageIdx: number, message: string) => void;
+
 /**
  * Sends media to the backend, attempting the primary Cloud (Render) server first.
+ * Supports real-time streaming progress (NDJSON) so progress maps directly to the active AI process.
  * If the Cloud server fails or is unreachable, smoothly fails over to the Local backend.
  */
-export async function analyzeMediaWithFallback(formData: FormData): Promise<{ data: any; usedUrl: string }> {
+export async function analyzeMediaWithFallback(
+  formData: FormData,
+  onProgress?: ProgressCallback
+): Promise<{ data: any; usedUrl: string }> {
   const candidateUrls = getCandidateUrls();
   const errors: string[] = [];
 
   for (const baseUrl of candidateUrls) {
     try {
-      console.info(`[DeepGuard Engine] Attempting inference connection at: ${baseUrl}/analyze`);
+      console.info(`[DeepGuard Engine] Attempting inference connection at: ${baseUrl}/analyze?stream=true`);
       
       const controller = new AbortController();
       // 2-minute timeout to allow for video upload + neural inference + Render cold-start
@@ -51,21 +57,75 @@ export async function analyzeMediaWithFallback(formData: FormData): Promise<{ da
         } catch (_) {}
       }, 120000);
 
-      const response = await fetch(`${baseUrl}/analyze`, {
+      onProgress?.(10, 0, "Transmitting media to inference engine...");
+
+      const response = await fetch(`${baseUrl}/analyze?stream=true`, {
         method: "POST",
         body: formData,
+        headers: {
+          "Accept": "application/x-ndjson, application/json",
+        },
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
-      if (response.ok) {
-        const data = await response.json();
-        console.info(`[DeepGuard Engine] Successfully analyzed media using endpoint: ${baseUrl}`);
-        return { data, usedUrl: baseUrl };
-      } else {
+      if (!response.ok) {
         const errText = await response.text();
         errors.push(`${baseUrl} responded with status ${response.status}: ${errText}`);
+        continue;
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+
+      // If streaming response (NDJSON)
+      if (contentType.includes("ndjson") || contentType.includes("stream")) {
+        if (!response.body) {
+          throw new Error("ReadableStream not supported by browser response");
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        let finalData: any = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            try {
+              const msg = JSON.parse(trimmed);
+              if (msg.type === "progress") {
+                onProgress?.(msg.progress, msg.stage ?? 0, msg.message ?? "");
+              } else if (msg.type === "complete") {
+                finalData = msg.data;
+              } else if (msg.type === "error") {
+                throw new Error(msg.message || "Engine reported an error during analysis");
+              }
+            } catch (parseErr: any) {
+              console.warn("[DeepGuard] Error parsing stream line:", parseErr);
+            }
+          }
+        }
+
+        if (finalData) {
+          onProgress?.(100, 3, "Forensic analysis complete!");
+          return { data: finalData, usedUrl: baseUrl };
+        } else {
+          throw new Error("Stream closed before completion payload was received");
+        }
+      } else {
+        // Standard JSON fallback
+        onProgress?.(85, 2, "Processing neural outputs & heatmaps...");
+        const data = await response.json();
+        onProgress?.(100, 3, "Forensic analysis complete!");
+        console.info(`[DeepGuard Engine] Successfully analyzed media using endpoint: ${baseUrl}`);
+        return { data, usedUrl: baseUrl };
       }
     } catch (err: any) {
       console.warn(`[DeepGuard Engine] Connection to ${baseUrl} failed:`, err.message || err);

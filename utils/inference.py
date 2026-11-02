@@ -63,7 +63,7 @@ def predict_frame_ensemble(pil_image):
 
 import gc
 
-def predict_video(video_path, sequence_length=3):
+def predict_video(video_path, sequence_length=3, progress_callback=None):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened(): return "Error", {"message": "Could not open video"}
     
@@ -88,6 +88,10 @@ def predict_video(video_path, sequence_length=3):
     # Sample every 10th frame to keep memory & CPU time very lean for cloud hosting
     sample_interval = max(5, int(fps // 3)) if fps else 8
     max_frames_to_process = 60 # Cap at 60 analyzed frames max for fast response & 0 memory overflow
+    estimated_target = max(1, min(max_frames_to_process, int(total_frames // sample_interval))) if total_frames > 0 else 30
+
+    if progress_callback:
+        progress_callback(15, 0, f"Decoding video: {total_frames} frames detected at {int(fps)} FPS...")
     
     frame_idx = 0
     while True:
@@ -108,6 +112,13 @@ def predict_video(video_path, sequence_length=3):
             
             if tensor is not None and label in ["FAKE", "REAL"]:
                 processed_frames += 1
+                
+                if progress_callback:
+                    ratio = min(1.0, processed_frames / estimated_target)
+                    pct = int(20 + ratio * 65)
+                    stage_idx = 1 if pct < 45 else 2
+                    stage_title = "Face Detection & Alignment" if stage_idx == 1 else "Dual-CNN Ensemble inference"
+                    progress_callback(pct, stage_idx, f"Processing frame {processed_frames}/{estimated_target}: {stage_title}...")
                 
                 if label == "FAKE" and conf > 60.0:
                     fake_frame_count += 1
@@ -142,8 +153,14 @@ def predict_video(video_path, sequence_length=3):
     cap.release()
     gc.collect()
 
+    if progress_callback:
+        progress_callback(88, 3, "Synthesizing Grad-CAM explainability heatmaps...")
+
     fake_ratio = (fake_frame_count / processed_frames) * 100 if processed_frames > 0 else 0
     final_prediction = "FAKE" if fake_ratio > 30.0 else "REAL"
+
+    if progress_callback:
+        progress_callback(96, 3, "Computing temporal streaks & compiling forensic report...")
 
     return final_prediction, {
         "fake_ratio": f"{fake_ratio:.2f}%",

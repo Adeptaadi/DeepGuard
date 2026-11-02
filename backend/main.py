@@ -3,9 +3,13 @@ import os
 import shutil
 import time
 import base64
+import json
+import queue
+import threading
 from io import BytesIO
 from PIL import Image
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -41,34 +45,108 @@ def health_check():
         "status": "online",
         "service": "DeepGuard AI Forensic Backend",
         "architecture": "Dual-CNN Ensemble (XceptionNet + EfficientNet-B0)",
-        "version": "2.4"
+        "version": "2.5"
     }
 
 @app.post("/analyze")
-async def analyze_video_endpoint(file: UploadFile = File(...)):
+async def analyze_video_endpoint(
+    request: Request,
+    file: UploadFile = File(...),
+    stream: bool = False
+):
     start_time = time.time()
-    temp_filename = f"temp_{file.filename}"
+    temp_filename = f"temp_{int(start_time)}_{file.filename}"
+    
+    # Check if stream requested via query param or Accept header
+    wants_stream = stream or "application/x-ndjson" in request.headers.get("accept", "")
     
     try:
         with open(temp_filename, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-            
-        # Run AI
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+
+    if wants_stream:
+        def event_generator():
+            q = queue.Queue()
+
+            def run_worker():
+                try:
+                    def on_progress(percent, stage_idx, message):
+                        q.put({"type": "progress", "progress": percent, "stage": stage_idx, "message": message})
+
+                    on_progress(10, 0, f"Initializing video stream: {file.filename}...")
+                    
+                    label, details = predict_video(temp_filename, progress_callback=on_progress)
+                    
+                    end_time = time.time()
+                    processing_time = round(end_time - start_time, 2)
+                    fake_ratio_val = float(details['fake_ratio'].replace('%', ''))
+                    confidence = 100.0 - fake_ratio_val if label == "REAL" else fake_ratio_val
+
+                    evidence_base64 = []
+                    if 'evidence' in details:
+                        for item in details['evidence']:
+                            evidence_base64.append({
+                                "image": image_to_base64(item['frame']),
+                                "timestamp": item['time'],
+                                "confidence": item['conf']
+                            })
+
+                    payload = {
+                        "isReal": (label == "REAL"),
+                        "confidence": round(confidence, 1),
+                        "processingTime": processing_time,
+                        "fileName": file.filename,
+                        "details": {
+                            "faceDetection": 95,
+                            "temporalConsistency": int(details.get("temporal_consistency", 92)),
+                            "artifactDetection": int(fake_ratio_val),
+                            "blinkAnalysis": 0
+                        },
+                        "evidence": evidence_base64
+                    }
+                    q.put({"type": "progress", "progress": 100, "stage": 3, "message": "Forensic analysis complete!"})
+                    q.put({"type": "complete", "progress": 100, "data": payload})
+                except Exception as ex:
+                    print(f"❌ Analysis Worker Error: {str(ex)}")
+                    q.put({"type": "error", "message": str(ex)})
+                finally:
+                    if os.path.exists(temp_filename):
+                        try:
+                            os.remove(temp_filename)
+                        except Exception:
+                            pass
+                    q.put(None)
+
+            threading.Thread(target=run_worker, daemon=True).start()
+
+            while True:
+                msg = q.get()
+                if msg is None:
+                    break
+                yield json.dumps(msg) + "\n"
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="application/x-ndjson",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
+    # Standard non-streaming fallback
+    try:
         label, details = predict_video(temp_filename)
-        
-        # Calculate Metrics
         end_time = time.time()
         processing_time = round(end_time - start_time, 2)
         fake_ratio_val = float(details['fake_ratio'].replace('%', ''))
         confidence = 100.0 - fake_ratio_val if label == "REAL" else fake_ratio_val
 
-        # Process Evidence Images (Heatmaps) for Frontend
         evidence_base64 = []
         if 'evidence' in details:
             for item in details['evidence']:
-                # item['frame'] is a PIL Image (the heatmap)
-                # item['time'] is the timestamp string
-                # item['conf'] is the confidence float
                 evidence_base64.append({
                     "image": image_to_base64(item['frame']),
                     "timestamp": item['time'],
@@ -77,22 +155,23 @@ async def analyze_video_endpoint(file: UploadFile = File(...)):
 
         return {
             "isReal": (label == "REAL"),
-            "confidence": round(confidence,1),
+            "confidence": round(confidence, 1),
             "processingTime": processing_time,
             "fileName": file.filename,
             "details": {
-            "faceDetection": 95,
-            "temporalConsistency": int(details.get("temporal_consistency", 92)),
-            "artifactDetection": int(fake_ratio_val),
-            "blinkAnalysis": 0
+                "faceDetection": 95,
+                "temporalConsistency": int(details.get("temporal_consistency", 92)),
+                "artifactDetection": int(fake_ratio_val),
+                "blinkAnalysis": 0
             },
-            "evidence": evidence_base64 # <--- Sending the images here
+            "evidence": evidence_base64
         }
-
     except Exception as e:
         print(f"❌ API Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-        
     finally:
         if os.path.exists(temp_filename):
-            os.remove(temp_filename)
+            try:
+                os.remove(temp_filename)
+            except Exception:
+                pass
