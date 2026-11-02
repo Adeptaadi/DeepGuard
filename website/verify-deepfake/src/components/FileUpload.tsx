@@ -1,156 +1,3 @@
-// import { useState, useCallback } from "react";
-// import { Button } from "@/components/ui/button";
-// import { Card, CardContent } from "@/components/ui/card";
-// import { Upload, FileImage, FileVideo, X, AlertCircle } from "lucide-react";
-// import { cn } from "@/lib/utils";
-
-// interface FileUploadProps {
-//   onFileSelect: (file: File) => void;
-//   className?: string;
-// }
-
-// const FileUpload = ({ onFileSelect, className }: FileUploadProps) => {
-//   const [dragActive, setDragActive] = useState(false);
-//   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-//   const [error, setError] = useState<string>("");
-
-//   const handleDrag = useCallback((e: React.DragEvent) => {
-//     e.preventDefault();
-//     e.stopPropagation();
-//     if (e.type === "dragenter" || e.type === "dragover") {
-//       setDragActive(true);
-//     } else if (e.type === "dragleave") {
-//       setDragActive(false);
-//     }
-//   }, []);
-
-//   const validateFile = (file: File): boolean => {
-//     const maxSize = 50 * 1024 * 1024; // 50MB
-//     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/mov'];
-    
-//     if (file.size > maxSize) {
-//       setError("File size must be less than 50MB");
-//       return false;
-//     }
-    
-//     if (!allowedTypes.includes(file.type)) {
-//       setError("Please upload an image (JPEG, PNG, WebP) or video (MP4, WebM, MOV) file");
-//       return false;
-//     }
-    
-//     setError("");
-//     return true;
-//   };
-
-//   const handleDrop = useCallback((e: React.DragEvent) => {
-//     e.preventDefault();
-//     e.stopPropagation();
-//     setDragActive(false);
-    
-//     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-//       const file = e.dataTransfer.files[0];
-//       if (validateFile(file)) {
-//         setSelectedFile(file);
-//         onFileSelect(file);
-//       }
-//     }
-//   }, [onFileSelect]);
-
-//   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-//     e.preventDefault();
-//     if (e.target.files && e.target.files[0]) {
-//       const file = e.target.files[0];
-//       if (validateFile(file)) {
-//         setSelectedFile(file);
-//         onFileSelect(file);
-//       }
-//     }
-//   };
-
-//   const removeFile = () => {
-//     setSelectedFile(null);
-//     setError("");
-//   };
-
-//   const isImage = selectedFile?.type.startsWith('image/');
-//   const isVideo = selectedFile?.type.startsWith('video/');
-
-//   return (
-//     <Card className={cn("w-full max-w-2xl mx-auto", className)}>
-//       <CardContent className="p-8">
-//         <div className="text-center mb-6">
-//           <h3 className="text-2xl font-bold mb-2">Upload Media for Analysis</h3>
-//           <p className="text-muted-foreground">
-//             Upload an image or video file to detect potential deepfake manipulation
-//           </p>
-//         </div>
-
-//         {!selectedFile ? (
-//           <div
-//             className={cn(
-//               "relative border-2 border-dashed rounded-lg p-12 text-center transition-all duration-300",
-//               dragActive 
-//                 ? "border-accent bg-accent/5 shadow-glow" 
-//                 : "border-border hover:border-accent/50 hover:bg-accent/5"
-//             )}
-//             onDragEnter={handleDrag}
-//             onDragLeave={handleDrag}
-//             onDragOver={handleDrag}
-//             onDrop={handleDrop}
-//           >
-//             <input
-//               type="file"
-//               accept="image/*,video/*"
-//               onChange={handleChange}
-//               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-//             />
-            
-//             <Upload className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-//             <h4 className="text-lg font-semibold mb-2">Drag & drop your file here</h4>
-//             <p className="text-muted-foreground mb-4">or click to browse</p>
-//             <Button variant="outline">Choose File</Button>
-            
-//             <div className="mt-6 text-xs text-muted-foreground">
-//               Supports: JPEG, PNG, WebP, MP4, WebM, MOV • Max size: 50MB
-//             </div>
-//           </div>
-//         ) : (
-//           <div className="space-y-4">
-//             <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
-//               <div className="flex items-center gap-3">
-//                 {isImage && <FileImage className="w-8 h-8 text-accent" />}
-//                 {isVideo && <FileVideo className="w-8 h-8 text-accent" />}
-//                 <div>
-//                   <div className="font-medium">{selectedFile.name}</div>
-//                   <div className="text-sm text-muted-foreground">
-//                     {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-//                   </div>
-//                 </div>
-//               </div>
-//               <Button variant="ghost" size="icon" onClick={removeFile}>
-//                 <X className="w-4 h-4" />
-//               </Button>
-//             </div>
-            
-//             <Button variant="hero" size="lg" className="w-full">
-//               Analyze for Deepfakes
-//             </Button>
-//           </div>
-//         )}
-
-//         {error && (
-//           <div className="mt-4 flex items-center gap-2 text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20">
-//             <AlertCircle className="w-4 h-4" />
-//             <span className="text-sm">{error}</span>
-//           </div>
-//         )}
-//       </CardContent>
-//     </Card>
-//   );
-// };
-
-// export default FileUpload;
-
 import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -178,8 +25,8 @@ interface FileUploadProps {
 }
 
 const ANALYSIS_STAGES = [
-  { label: "Connecting to Neural Inference Engine (Render Cloud / Local)...", progress: 20, icon: FileVideo },
-  { label: "Running MTCNN face detection with 80px boundary margin...", progress: 45, icon: Eye },
+  { label: "Decoding video frames & sampling sequence...", progress: 20, icon: FileVideo },
+  { label: "Face Detection & Alignment with boundary margin...", progress: 45, icon: Eye },
   { label: "Dual-CNN Inference: XceptionNet (Spatial) + EfficientNet (Texture)...", progress: 70, icon: Cpu },
   { label: "Computing temporal streaks & synthesizing Grad-CAM heatmaps...", progress: 92, icon: Activity }
 ];
@@ -190,26 +37,20 @@ const FileUpload = ({ onAnalysisComplete, className }: FileUploadProps) => {
   const [error, setError] = useState<string>("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentStageIdx, setCurrentStageIdx] = useState(0);
-  const [simulatedProgress, setSimulatedProgress] = useState(0);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [stageMessage, setStageMessage] = useState<string>("");
 
-  // Simulated progression through forensic stages during analysis
+  // Smooth client-side transmission pacing: bounded strictly between 8% and 18%
+  // Strictly monotonic: only increments while waiting for server response, NEVER decreases, NEVER exceeds 18%
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isAnalyzing) {
-      setSimulatedProgress(10);
-      setCurrentStageIdx(0);
       interval = setInterval(() => {
-        setSimulatedProgress((prev) => {
-          if (prev >= 94) return 94; // Hold until API returns
-          const next = prev + Math.floor(Math.random() * 8) + 3;
-          if (next > 75) setCurrentStageIdx(3);
-          else if (next > 45) setCurrentStageIdx(2);
-          else if (next > 20) setCurrentStageIdx(1);
-          return next;
+        setAnalysisProgress((prev) => {
+          if (prev >= 18) return prev;
+          return prev + 1;
         });
-      }, 700);
-    } else {
-      setSimulatedProgress(0);
+      }, 500);
     }
     return () => clearInterval(interval);
   }, [isAnalyzing]);
@@ -267,22 +108,40 @@ const FileUpload = ({ onAnalysisComplete, className }: FileUploadProps) => {
 
     setIsAnalyzing(true);
     setError("");
+    setAnalysisProgress(8);
+    setCurrentStageIdx(0);
+    setStageMessage("Transmitting media to forensic inference engine...");
 
     const formData = new FormData();
     formData.append("file", selectedFile);
 
     try {
-      // Connect to Primary Render Cloud Backend with Localhost Fallback
-      const { data, usedUrl } = await analyzeMediaWithFallback(formData);
+      // Connect to Primary Render Cloud Backend with Localhost Fallback and live progress mapping
+      const { data, usedUrl } = await analyzeMediaWithFallback(
+        formData,
+        (progress, stageIdx, msg) => {
+          // Strictly monotonic progress: can NEVER decrease or backtrack
+          setAnalysisProgress((prev) => Math.max(prev, progress));
+          if (typeof stageIdx === "number" && stageIdx >= 0) {
+            setCurrentStageIdx(stageIdx);
+          }
+          if (msg) {
+            setStageMessage(msg);
+          }
+        }
+      );
       console.log(`[DeepGuard] Analysis finished successfully via ${usedUrl}`);
       
-      setSimulatedProgress(100);
+      setAnalysisProgress(100);
+      setCurrentStageIdx(3);
+      setStageMessage("Forensic dossier compiled successfully!");
       setTimeout(() => {
         onAnalysisComplete(data);
       }, 400);
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to connect to forensic backend. Please ensure the Render backend is live or localhost server is running.");
+      setAnalysisProgress(0);
     } finally {
       setIsAnalyzing(false);
     }
@@ -291,6 +150,8 @@ const FileUpload = ({ onAnalysisComplete, className }: FileUploadProps) => {
   const removeFile = () => {
     setSelectedFile(null);
     setError("");
+    setAnalysisProgress(0);
+    setStageMessage("");
   };
 
   const formatFileSize = (bytes: number) => {
@@ -405,26 +266,26 @@ const FileUpload = ({ onAnalysisComplete, className }: FileUploadProps) => {
               {isAnalyzing && (
                 <div className="p-5 rounded-xl bg-secondary/40 border border-accent/30 space-y-4">
                   <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="flex items-center gap-2 text-accent font-medium">
-                      <StageIcon className="w-4 h-4 animate-spin text-accent" />
-                      {currentStage?.label}
+                    <span className="flex items-center gap-2 text-accent font-medium truncate max-w-[85%]">
+                      <StageIcon className="w-4 h-4 animate-spin text-accent flex-shrink-0" />
+                      <span className="truncate">{stageMessage || currentStage?.label}</span>
                     </span>
-                    <span className="text-accent font-bold">{simulatedProgress}%</span>
+                    <span className="text-accent font-bold ml-2">{analysisProgress}%</span>
                   </div>
 
-                  <Progress value={simulatedProgress} className="h-2 bg-secondary" />
+                  <Progress value={analysisProgress} className="h-2 bg-secondary" />
 
                   <div className="grid grid-cols-4 gap-2 pt-1 text-[10px] font-mono text-muted-foreground">
-                    <div className={cn("text-center py-1 rounded", simulatedProgress >= 20 ? "text-accent bg-accent/10" : "")}>
+                    <div className={cn("text-center py-1 rounded transition-colors", analysisProgress >= 15 ? "text-accent bg-accent/10 font-bold" : "")}>
                       Frame Decode
                     </div>
-                    <div className={cn("text-center py-1 rounded", simulatedProgress >= 45 ? "text-accent bg-accent/10" : "")}>
+                    <div className={cn("text-center py-1 rounded transition-colors", analysisProgress >= 30 ? "text-accent bg-accent/10 font-bold" : "")}>
                       MTCNN Crop
                     </div>
-                    <div className={cn("text-center py-1 rounded", simulatedProgress >= 70 ? "text-accent bg-accent/10" : "")}>
+                    <div className={cn("text-center py-1 rounded transition-colors", analysisProgress >= 60 ? "text-accent bg-accent/10 font-bold" : "")}>
                       Dual-CNN
                     </div>
-                    <div className={cn("text-center py-1 rounded", simulatedProgress >= 90 ? "text-accent bg-accent/10" : "")}>
+                    <div className={cn("text-center py-1 rounded transition-colors", analysisProgress >= 88 ? "text-accent bg-accent/10 font-bold" : "")}>
                       Grad-CAM
                     </div>
                   </div>
