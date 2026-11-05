@@ -3,14 +3,14 @@
  * 
  * Strategy:
  * 1. Checks configured environment variable (VITE_API_URL / VITE_RENDER_API_URL).
- * 2. Primary: Render cloud backend (https://deepguard-backend-ug4e.onrender.com).
- * 3. Fallback: Localhost / local development engine (http://127.0.0.1:8000).
+ * 2. Same-origin Vercel proxy (/api) to bypass Brave Shields & adblocker false-positives.
+ * 3. Direct Render cloud backend (https://deepguard-backend-ug4e.onrender.com).
+ * 4. Localhost / local development engine (http://127.0.0.1:8000).
  */
 
 const DEFAULT_RENDER_URL = "https://deepguard-backend-ug4e.onrender.com";
 const DEFAULT_LOCAL_URL = "http://127.0.0.1:8000";
 
-// Primary: Render Cloud -> Fallback: Localhost
 export const getCandidateUrls = (): string[] => {
   const envUrl = import.meta.env.VITE_API_URL;
   const urls: string[] = [];
@@ -19,11 +19,21 @@ export const getCandidateUrls = (): string[] => {
     const cleanedEnv = envUrl.replace(/\/+$/, "");
     if (!urls.includes(cleanedEnv)) urls.push(cleanedEnv);
   }
+
+  // 1. Same-origin Vercel rewrite proxy (bypasses Brave Shields & adblockers)
+  if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    const sameOriginApi = `${window.location.origin}/api`;
+    if (!urls.includes(sameOriginApi)) {
+      urls.push(sameOriginApi);
+    }
+  }
   
+  // 2. Direct Render Cloud
   if (!urls.includes(DEFAULT_RENDER_URL)) {
     urls.push(DEFAULT_RENDER_URL);
   }
 
+  // 3. Fallback: Localhost
   if (!urls.includes(DEFAULT_LOCAL_URL)) {
     urls.push(DEFAULT_LOCAL_URL);
   }
@@ -34,9 +44,8 @@ export const getCandidateUrls = (): string[] => {
 export type ProgressCallback = (progress: number, stageIdx: number, message: string) => void;
 
 /**
- * Sends media to the backend, attempting the primary Cloud (Render) server first.
+ * Sends media to the backend, attempting same-origin proxy, Render Cloud, and Localhost in order.
  * Supports real-time streaming progress (NDJSON) so progress maps directly to the active AI process.
- * If the Cloud server fails or is unreachable, smoothly fails over to the Local backend.
  */
 export async function analyzeMediaWithFallback(
   formData: FormData,
@@ -137,17 +146,26 @@ export async function analyzeMediaWithFallback(
     }
   }
 
+  const isBlockedByBrowser = errors.some(
+    (e) => e.toLowerCase().includes("blocked") || e.toLowerCase().includes("failed to fetch")
+  );
+
+  const browserBlockerAdvice = isBlockedByBrowser
+    ? `\n\n🛡️ Brave Shields / Adblocker Detected:\nYour browser (Brave Shields, uBlock Origin, or Adblock) is blocking cross-domain requests (ERR_BLOCKED_BY_CLIENT). Click the Brave Lion icon in the address bar and turn Shields OFF for this site.`
+    : "";
+
   throw new Error(
     `Unable to reach DeepGuard AI engine.\n` +
     `Attempted endpoints:\n` +
     errors.map((e) => `• ${e}`).join("\n") +
+    browserBlockerAdvice +
     `\n\nIf using Render free tier, the instance might be waking up (allow 30-45s) or ensure your local backend is running with 'python -m uvicorn backend.main:app'.`
   );
 }
 
 /**
  * Wakes up the Render backend immediately when the user lands on the website.
- * This ensures any cold-start latency is resolved in the background while the user is browsing or uploading.
+ * Tries the same-origin proxy first, then direct Render, then Localhost.
  */
 export async function warmUpBackend(): Promise<{ status: "online" | "waking_up"; url?: string }> {
   const candidateUrls = getCandidateUrls();

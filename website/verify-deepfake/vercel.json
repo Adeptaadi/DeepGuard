@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/:match*",
+      "destination": "https://deepguard-backend-ug4e.onrender.com/:match*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
