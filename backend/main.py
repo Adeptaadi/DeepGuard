@@ -6,6 +6,7 @@ import base64
 import json
 import queue
 import threading
+import traceback
 from io import BytesIO
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
@@ -19,27 +20,28 @@ try:
 except ImportError as e:
     raise e
 
-app = FastAPI()
+app = FastAPI(title="DeepGuard AI Forensic Backend", version="2.5")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
 def image_to_base64(pil_image):
     """Converts a PIL image to a base64 string for the frontend"""
     buffered = BytesIO()
-    # Convert to RGB to ensure compatibility
     if pil_image.mode != 'RGB':
         pil_image = pil_image.convert('RGB')
-    pil_image.save(buffered, format="JPEG")
+    pil_image.save(buffered, format="JPEG", quality=85)
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-@app.get("/")
-@app.get("/health")
+
+@app.api_route("/", methods=["GET", "HEAD"])
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     return {
         "status": "online",
@@ -47,6 +49,7 @@ def health_check():
         "architecture": "Dual-CNN Ensemble (XceptionNet + EfficientNet-B0)",
         "version": "2.5"
     }
+
 
 @app.post("/analyze")
 async def analyze_video_endpoint(
@@ -81,7 +84,8 @@ async def analyze_video_endpoint(
                     
                     end_time = time.time()
                     processing_time = round(end_time - start_time, 2)
-                    fake_ratio_val = float(details['fake_ratio'].replace('%', ''))
+                    fake_ratio_str = details.get('fake_ratio', '0%').replace('%', '')
+                    fake_ratio_val = float(fake_ratio_str) if fake_ratio_str else 0.0
                     confidence = 100.0 - fake_ratio_val if label == "REAL" else fake_ratio_val
 
                     evidence_base64 = []
@@ -99,7 +103,7 @@ async def analyze_video_endpoint(
                         "processingTime": processing_time,
                         "fileName": file.filename,
                         "details": {
-                            "faceDetection": 95,
+                            "faceDetection": 95 if details.get("processed_frames", 1) > 0 else 0,
                             "temporalConsistency": int(details.get("temporal_consistency", 92)),
                             "artifactDetection": int(fake_ratio_val),
                             "blinkAnalysis": 0
@@ -109,6 +113,7 @@ async def analyze_video_endpoint(
                     q.put({"type": "progress", "progress": 100, "stage": 3, "message": "Forensic analysis complete!"})
                     q.put({"type": "complete", "progress": 100, "data": payload})
                 except Exception as ex:
+                    traceback.print_exc()
                     print(f"❌ Analysis Worker Error: {str(ex)}")
                     q.put({"type": "error", "message": str(ex)})
                 finally:
@@ -141,7 +146,8 @@ async def analyze_video_endpoint(
         label, details = predict_video(temp_filename)
         end_time = time.time()
         processing_time = round(end_time - start_time, 2)
-        fake_ratio_val = float(details['fake_ratio'].replace('%', ''))
+        fake_ratio_str = details.get('fake_ratio', '0%').replace('%', '')
+        fake_ratio_val = float(fake_ratio_str) if fake_ratio_str else 0.0
         confidence = 100.0 - fake_ratio_val if label == "REAL" else fake_ratio_val
 
         evidence_base64 = []
@@ -159,7 +165,7 @@ async def analyze_video_endpoint(
             "processingTime": processing_time,
             "fileName": file.filename,
             "details": {
-                "faceDetection": 95,
+                "faceDetection": 95 if details.get("processed_frames", 1) > 0 else 0,
                 "temporalConsistency": int(details.get("temporal_consistency", 92)),
                 "artifactDetection": int(fake_ratio_val),
                 "blinkAnalysis": 0
@@ -167,8 +173,8 @@ async def analyze_video_endpoint(
             "evidence": evidence_base64
         }
     except Exception as e:
-        print(f"❌ API Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
     finally:
         if os.path.exists(temp_filename):
             try:

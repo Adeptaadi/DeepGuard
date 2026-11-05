@@ -50,12 +50,12 @@ export async function analyzeMediaWithFallback(
       console.info(`[DeepGuard Engine] Attempting inference connection at: ${baseUrl}/analyze?stream=true`);
       
       const controller = new AbortController();
-      // 2-minute timeout to allow for video upload + neural inference + Render cold-start
+      // 3-minute timeout to allow for video upload + neural inference + Render CPU processing
       const timeoutId = setTimeout(() => {
         try {
           controller.abort();
         } catch (_) {}
-      }, 120000);
+      }, 180000);
 
       onProgress?.(10, 0, "Transmitting media to inference engine...");
 
@@ -98,17 +98,21 @@ export async function analyzeMediaWithFallback(
           for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed) continue;
+            
+            let msg: any = null;
             try {
-              const msg = JSON.parse(trimmed);
-              if (msg.type === "progress") {
-                onProgress?.(msg.progress, msg.stage ?? 0, msg.message ?? "");
-              } else if (msg.type === "complete") {
-                finalData = msg.data;
-              } else if (msg.type === "error") {
-                throw new Error(msg.message || "Engine reported an error during analysis");
-              }
+              msg = JSON.parse(trimmed);
             } catch (parseErr: any) {
               console.warn("[DeepGuard] Error parsing stream line:", parseErr);
+              continue;
+            }
+
+            if (msg.type === "progress") {
+              onProgress?.(msg.progress, msg.stage ?? 0, msg.message ?? "");
+            } else if (msg.type === "complete") {
+              finalData = msg.data;
+            } else if (msg.type === "error") {
+              throw new Error(msg.message || "Engine reported an error during analysis");
             }
           }
         }
@@ -153,7 +157,7 @@ export async function warmUpBackend(): Promise<{ status: "online" | "waking_up";
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         try { controller.abort(); } catch (_) {}
-      }, 8000);
+      }, 5000);
 
       const res = await fetch(`${baseUrl}/health`, {
         method: "GET",

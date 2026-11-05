@@ -1,86 +1,3 @@
-// import { useState } from "react";
-// import Navigation from "@/components/Navigation";
-// import Hero from "@/components/Hero";
-// import FileUpload from "@/components/FileUpload";
-// import AnalysisResults from "@/components/AnalysisResults";
-// import HowItWorks from "@/components/HowItWorks";
-// import { Separator } from "@/components/ui/separator";
-
-// const Index = () => {
-//   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-//   const [analysisResult, setAnalysisResult] = useState<any>(null);
-//   const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-//   const handleFileSelect = async (file: File) => {
-//     setSelectedFile(file);
-//     setIsAnalyzing(true);
-    
-//     // Simulate API call
-//     setTimeout(() => {
-//       const mockResult = {
-//         isReal: Math.random() > 0.5,
-//         confidence: Math.floor(Math.random() * 30) + 70, // 70-99%
-//         processingTime: (Math.random() * 3 + 2).toFixed(1), // 2-5 seconds
-//         fileName: file.name,
-//         details: {
-//           faceDetection: Math.floor(Math.random() * 20) + 80,
-//           temporalConsistency: file.type.startsWith('video/') ? Math.floor(Math.random() * 25) + 75 : undefined,
-//           artifactDetection: Math.floor(Math.random() * 30) + 70,
-//           blinkAnalysis: file.type.startsWith('video/') ? Math.floor(Math.random() * 20) + 80 : undefined,
-//         }
-//       };
-//       setAnalysisResult(mockResult);
-//       setIsAnalyzing(false);
-//     }, 3000);
-//   };
-
-//   return (
-//     <div className="min-h-screen bg-background">
-//       <Navigation />
-      
-//       <main>
-//         <section id="home">
-//           <Hero />
-//         </section>
-        
-//         <Separator className="opacity-50" />
-        
-//         <section className="py-24">
-//           <div className="container mx-auto px-6">
-//             <div className="max-w-4xl mx-auto">
-//               <FileUpload onFileSelect={handleFileSelect} />
-              
-//               {isAnalyzing && (
-//                 <div className="mt-12 text-center">
-//                   <div className="inline-flex items-center gap-3 bg-accent/10 text-accent px-6 py-4 rounded-lg border border-accent/20">
-//                     <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-//                     Analyzing content for deepfake patterns...
-//                   </div>
-//                 </div>
-//               )}
-              
-//               {analysisResult && !isAnalyzing && (
-//                 <div className="mt-12">
-//                   <AnalysisResults result={analysisResult} />
-//                 </div>
-//               )}
-//             </div>
-//           </div>
-//         </section>
-        
-//         <Separator className="opacity-50" />
-        
-//         <section id="how-it-works">
-//           <HowItWorks />
-//         </section>
-//       </main>
-//     </div>
-//   );
-// };
-
-// export default Index;
-
-
 import { useState, useEffect } from "react";
 import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
@@ -88,51 +5,49 @@ import FileUpload from "@/components/FileUpload";
 import AnalysisResults from "@/components/AnalysisResults";
 import HowItWorks from "@/components/HowItWorks";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { warmUpBackend } from "@/lib/api";
 import { 
   RefreshCw, 
   Eye, 
-  ShieldCheck, 
   Award, 
-  BookOpen, 
-  CheckCircle2, 
   Cpu, 
-  Users, 
-  ExternalLink,
-  Code2,
-  Terminal,
-  FileCheck2
+  Users 
 } from "lucide-react";
 
 const Index = () => {
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [engineStatus, setEngineStatus] = useState<"connecting" | "online" | "ready">("connecting");
 
-  // Instant wake-up call + background polling until Render is online
+  // Instant wake-up call + non-overlapping background polling until Render is online
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-    
-    const checkHealth = async () => {
-      const res = await warmUpBackend();
-      if (res.status === "online") {
-        setEngineStatus("online");
-        if (intervalId) clearInterval(intervalId);
+    let isMounted = true;
+    let timerId: any = null;
+
+    const poll = async () => {
+      try {
+        const res = await warmUpBackend();
+        if (res.status === "online" && isMounted) {
+          setEngineStatus("online");
+          return; // Stop polling once online
+        }
+      } catch (_) {}
+
+      if (isMounted) {
+        timerId = setTimeout(poll, 3000);
       }
     };
 
-    // Immediate check
-    checkHealth();
-
-    // Poll every 4 seconds until connected
-    intervalId = setInterval(checkHealth, 4000);
+    poll();
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      isMounted = false;
+      if (timerId) clearTimeout(timerId);
     };
   }, []);
 
   const handleAnalysisComplete = (data: any) => {
+    setEngineStatus("online");
     setAnalysisResult(data);
   };
 

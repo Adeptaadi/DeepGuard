@@ -3,6 +3,7 @@ from torchvision import transforms
 from PIL import Image
 import cv2
 import os
+import gc
 import numpy as np
 from facenet_pytorch import MTCNN
 from utils.model_utils import get_model
@@ -41,12 +42,18 @@ base_transform = transforms.Compose([
     transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) 
 ])
 
+
 def predict_frame_ensemble(pil_image):
+    """
+    Inference on a single PIL image using the Dual-CNN ensemble.
+    Always returns a 4-tuple: (label, confidence, img_tensor, face_crop).
+    """
     if pil_image.mode != 'RGB':
         pil_image = pil_image.convert('RGB')
         
     boxes, _ = mtcnn.detect(pil_image)
-    if boxes is None: return "No face detected", 0.0
+    if boxes is None or len(boxes) == 0:
+        return "No face detected", 0.0, None, None
 
     box = boxes[0]
     box = [max(0, b) for b in box]
@@ -54,10 +61,12 @@ def predict_frame_ensemble(pil_image):
     width = box[2] - box[0]
     height = box[3] - box[1]
     ratio = width / height if height > 0 else 0
-    if ratio < 0.5 or ratio > 2.0: return "Bad Crop", 0.0
+    if ratio < 0.5 or ratio > 2.0:
+        return "Bad Crop", 0.0, None, None
 
     face_img = pil_image.crop((box[0], box[1], box[2], box[3]))
-    if face_img.size[0] == 0 or face_img.size[1] == 0: return "No face detected", 0.0
+    if face_img.size[0] == 0 or face_img.size[1] == 0:
+        return "No face detected", 0.0, None, None
 
     img_tensor = base_transform(face_img).unsqueeze(0).to(DEVICE)
 
@@ -70,20 +79,24 @@ def predict_frame_ensemble(pil_image):
 
         avg_fake_score = (prob_xc + prob_ef) / 2
 
-    # Return label, confidence, tensor, and crop for visualization
     label = "FAKE" if avg_fake_score > 0.50 else "REAL"
     confidence = avg_fake_score * 100 if label == "FAKE" else (1 - avg_fake_score) * 100
     
     return label, confidence, img_tensor, face_img
 
-import gc
 
 def predict_video(video_path, sequence_length=3, progress_callback=None):
+    """
+    Processes video media, sampling frames across time, calculating temporal streak statistics,
+    and generating Grad-CAM heatmaps for forensic evidence.
+    """
     cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened(): return "Error", {"message": "Could not open video"}
+    if not cap.isOpened():
+        return "Error", {"message": "Could not open video file", "fake_ratio": "0%", "evidence": []}
     
     fps = cap.get(cv2.CAP_PROP_FPS)
-    if not fps or fps <= 0: fps = 25.0
+    if not fps or fps <= 0:
+        fps = 25.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
     fake_frame_count = 0
@@ -100,9 +113,9 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
     target_layer = getattr(model_xc, 'act4', None) or getattr(model_xc, 'conv4', None)
     cam = GradCAM(model_xc, target_layer) if target_layer is not None else None
     
-    # Sample every 10th frame to keep memory & CPU time very lean for cloud hosting
+    # Sample interval: sample every ~0.3s to 0.4s to be fast and memory-safe
     sample_interval = max(5, int(fps // 3)) if fps else 8
-    max_frames_to_process = 60 # Cap at 60 analyzed frames max for fast response & 0 memory overflow
+    max_frames_to_process = 60  # Cap at 60 analyzed frames to prevent memory spikes on Render free tier
     estimated_target = max(1, min(max_frames_to_process, int(total_frames // sample_interval))) if total_frames > 0 else 30
 
     if progress_callback:
@@ -123,16 +136,23 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
                 frame = cv2.resize(frame, (1280, int(h * (1280 / w))))
                 
             pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            label, conf, tensor, crop = predict_frame_ensemble(pil_img)
+            pred_res = predict_frame_ensemble(pil_img)
             
-            if label not in ["Bad Crop", "No face detected"]:
+            # Safe unpack
+            if len(pred_res) == 4:
+                label, conf, tensor, crop = pred_res
+            else:
+                label, conf = pred_res[0], pred_res[1]
+                tensor, crop = None, None
+            
+            if label not in ["Bad Crop", "No face detected"] and tensor is not None:
                 processed_frames += 1
                 
                 if progress_callback:
                     ratio = min(1.0, processed_frames / estimated_target)
                     pct = int(20 + ratio * 65)
                     stage_idx = 1 if pct < 45 else 2
-                    stage_title = "Face Detection & Alignment" if stage_idx == 1 else "Dual-CNN Ensemble inference"
+                    stage_title = "Face Alignment" if stage_idx == 1 else "Dual-CNN Ensemble inference"
                     progress_callback(pct, stage_idx, f"Processing frame {processed_frames}/{estimated_target}: {stage_title}...")
                 
                 if label == "FAKE" and conf > 60.0:
@@ -155,13 +175,18 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
                     if consecutive_fake_streak >= sequence_length:
                         seconds = frame_idx / fps if fps else 0
                         time_str = f"{int(seconds // 60)}m {int(seconds % 60):02d}s"
-                        if time_str not in suspicious_timestamps: suspicious_timestamps.append(time_str)
+                        if time_str not in suspicious_timestamps:
+                            suspicious_timestamps.append(time_str)
                 else:
                     max_fake_streak = max(max_fake_streak, consecutive_fake_streak)
                     consecutive_fake_streak = 0
             
             # Explicit reference cleanup
-            del pil_img, tensor, crop
+            del pil_img
+            if tensor is not None:
+                del tensor
+            if crop is not None:
+                del crop
             
         frame_idx += 1
         
@@ -171,7 +196,7 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
     if progress_callback:
         progress_callback(88, 3, "Synthesizing Grad-CAM explainability heatmaps...")
 
-    fake_ratio = (fake_frame_count / processed_frames) * 100 if processed_frames > 0 else 0
+    fake_ratio = (fake_frame_count / processed_frames) * 100 if processed_frames > 0 else 0.0
     final_prediction = "FAKE" if fake_ratio > 30.0 else "REAL"
 
     if progress_callback:
@@ -181,9 +206,15 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
         "fake_ratio": f"{fake_ratio:.2f}%",
         "max_consecutive_fakes": max_fake_streak * sample_interval, 
         "timestamps": suspicious_timestamps,
-        "evidence": evidence_frames[:6]
+        "evidence": evidence_frames[:6],
+        "processed_frames": processed_frames
     }
 
+
 def predict_frame_tta(pil_image):
-    l, c, _, _ = predict_frame_ensemble(pil_image)
-    return l, c
+    """
+    Inference on a single image.
+    Always returns a 2-tuple: (label, confidence).
+    """
+    res = predict_frame_ensemble(pil_image)
+    return res[0], res[1]
