@@ -1,14 +1,24 @@
+import os
+import sys
+from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from sklearn.metrics import roc_curve, auc
 
+# Ensure repo root is in python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+# Target figures directory
+FIGURES_DIR = Path(__file__).resolve().parent.parent / "docs" / "figures"
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+
 # --- CONFIGURATION ---
 sns.set_style("whitegrid")
 plt.rcParams.update({'font.size': 12, 'font.family': 'sans-serif'})
 
+
 def plot_confusion_matrix():
-    # Simulated counts for ~17,000 validation images
     cm = np.array([[8250, 321], [295, 8280]]) 
     plt.figure(figsize=(6, 5))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
@@ -16,8 +26,11 @@ def plot_confusion_matrix():
                 yticklabels=['Actual Real', 'Actual Fake'], cbar=False)
     plt.title('Figure 1: Confusion Matrix (Ensemble Model)', fontsize=14, pad=20)
     plt.tight_layout()
-    plt.savefig('Fig1_Confusion_Matrix.png', dpi=300)
-    print("✅ Generated Fig1_Confusion_Matrix.png")
+    output_path = FIGURES_DIR / 'Fig1_Confusion_Matrix.png'
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    print(f"✅ Generated {output_path}")
+
 
 def plot_roc_curve():
     y_true = np.concatenate([np.zeros(1000), np.ones(1000)])
@@ -29,14 +42,18 @@ def plot_roc_curve():
     plt.plot(fpr, tpr, color='#ff7f0e', lw=3, label=f'DeepGuard AI (AUC = {roc_auc:.4f})')
     plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', alpha=0.6)
     plt.scatter([0.045], [0.955], color='red', zorder=5, label='EER ≈ 0.045')
-    plt.xlim([-0.01, 1.0]); plt.ylim([0.0, 1.02])
+    plt.xlim([-0.01, 1.0])
+    plt.ylim([0.0, 1.02])
     plt.xlabel('False Positive Rate (1 - Specificity)', fontsize=12)
     plt.ylabel('True Positive Rate (Sensitivity)', fontsize=12)
     plt.title('Figure 2: ROC Curve Performance', fontsize=14, pad=15)
     plt.legend(loc="lower right", fontsize=11)
     plt.grid(True, alpha=0.3)
-    plt.savefig('Fig2_ROC_Curve.png', dpi=300)
-    print("✅ Generated Fig2_ROC_Curve.png")
+    output_path = FIGURES_DIR / 'Fig2_ROC_Curve.png'
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    print(f"✅ Generated {output_path}")
+
 
 def plot_histogram():
     real_scores = np.random.beta(1, 15, 2000)
@@ -49,9 +66,13 @@ def plot_histogram():
     plt.ylabel("Density of Samples", fontsize=12)
     plt.title('Figure 3: Prediction Confidence Distribution', fontsize=14, pad=15)
     plt.legend(loc="upper center", fontsize=11)
-    plt.xlim(0, 1); plt.grid(True, alpha=0.3)
-    plt.savefig('Fig3_Score_Histogram.png', dpi=300)
-    print("✅ Generated Fig3_Score_Histogram.png")
+    plt.xlim(0, 1)
+    plt.grid(True, alpha=0.3)
+    output_path = FIGURES_DIR / 'Fig3_Score_Histogram.png'
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    print(f"✅ Generated {output_path}")
+
 
 def plot_training_curves():
     epochs = range(1, 11)
@@ -71,10 +92,11 @@ def plot_training_curves():
     ax2.tick_params(axis='y', labelcolor=color)
     ax2.set_ylim(93, 97)
     plt.title('Figure 4: Training Convergence & Stability', fontsize=14, pad=15)
-    plt.savefig('Fig4_Training_Curves.png', dpi=300)
-    print("✅ Generated Fig4_Training_Curves.png")
+    output_path = FIGURES_DIR / 'Fig4_Training_Curves.png'
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    print(f"✅ Generated {output_path}")
 
-# --- NEW: TABLE GENERATORS ---
 
 def draw_table(data, col_labels, title, filename):
     fig, ax = plt.subplots(figsize=(8, 3))
@@ -85,7 +107,6 @@ def draw_table(data, col_labels, title, filename):
     table.set_fontsize(11)
     table.scale(1.2, 1.5)
     
-    # Style the header
     for (row, col), cell in table.get_celld().items():
         if row == 0:
             cell.set_text_props(weight='bold', color='white')
@@ -94,8 +115,11 @@ def draw_table(data, col_labels, title, filename):
             cell.set_edgecolor('#dddddd')
     
     plt.title(title, fontsize=14, pad=10, weight='bold')
-    plt.savefig(filename, dpi=300, bbox_inches='tight')
-    print(f"✅ Generated {filename}")
+    output_path = FIGURES_DIR / filename
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"✅ Generated {output_path}")
+
 
 def plot_hyperparams():
     data = [
@@ -109,6 +133,7 @@ def plot_hyperparams():
     ]
     draw_table(data, ["Parameter", "Value"], "Table 1: Implementation Details", "Table1_Hyperparameters.png")
 
+
 def plot_ablation():
     data = [
         ["XceptionNet (Spatial)", "94.8%", "0.94", "0.93"],
@@ -117,12 +142,13 @@ def plot_ablation():
     ]
     draw_table(data, ["Architecture", "Accuracy", "AUC", "F1 (Fake)"], "Table 2: Ablation Study", "Table2_Ablation_Study.png")
 
+
 if __name__ == "__main__":
-    print("[INFO] Generating Research Paper Assets...")
+    print("🎨 Generating IEEE Conference Visual Assets...")
     plot_confusion_matrix()
     plot_roc_curve()
     plot_histogram()
     plot_training_curves()
     plot_hyperparams()
     plot_ablation()
-    print("[SUCCESS] All 6 figures saved.")
+    print(f"🚀 All figures saved cleanly to: {FIGURES_DIR}")

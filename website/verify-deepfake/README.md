@@ -1,73 +1,78 @@
-# Welcome to your Lovable project
+# DeepGuard AI — Web Application
 
-## Project info
+> Modern, forensic-grade React interface for deepfake video and image detection.
 
-**URL**: https://lovable.dev/projects/27b48b31-585f-4ee6-8e22-d84241a57753
+Built with **React**, **TypeScript**, **Tailwind CSS**, and **Vite**, this application provides a web experience for analyzing media against the DeepGuard AI detection engine.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## ✨ Features
 
-**Use Lovable**
+- **Drag-and-Drop Forensic Upload**: Supports video (`.mp4`, `.avi`, `.mov`, `.webm`, `.mkv`) and image (`.jpg`, `.jpeg`, `.png`) formats.
+- **Real-Time Streaming Progress**: Monotonic live progress mapping connected to FastAPI's server-sent stream (Frame Decode ➔ Face Alignment ➔ Dual-CNN Ensemble ➔ Grad-CAM Synthesis).
+- **Explainable Visual Evidence**: Frame-by-frame Grad-CAM attention heatmaps highlighting facial manipulation seams, eyes, mouth, and boundary anomalies.
+- **Dual-Endpoint Resilience**: Automatically probes and streams from the production cloud backend (`https://deepguard-backend-ug4e.onrender.com`), with automatic instant fallback to local development server (`http://127.0.0.1:8000`).
+- **Instant Backend Warmup**: Pings the Render backend on website launch to eliminate cold-start delay for users.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/27b48b31-585f-4ee6-8e22-d84241a57753) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🚀 Quick Start
 
-**Use your preferred IDE**
+### 1. Install Dependencies
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+```bash
+npm install
+```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### 2. Run Local Development Server
 
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The web application will be live at `http://localhost:8080`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 3. Build for Production
 
-**Use GitHub Codespaces**
+```bash
+npm run build
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Production assets are compiled into the `dist/` directory, optimized for deployment on Vercel, Netlify, or static hosting.
 
-## What technologies are used for this project?
+---
 
-This project is built with:
+## ⚙️ Environment Configuration
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Configure custom API endpoints by setting the environment variable in `.env`:
 
-## How can I deploy this project?
+```env
+VITE_API_URL=https://your-backend-domain.com
+```
 
-Simply open [Lovable](https://lovable.dev/projects/27b48b31-585f-4ee6-8e22-d84241a57753) and click on Share -> Publish.
+If not provided, the frontend automatically falls back to:
+1. `https://deepguard-backend-ug4e.onrender.com` (Cloud Instance)
+2. `http://127.0.0.1:8000` (Local Development)
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes, you can!
+## 🏛️ Project Architecture
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```
+src/
+├── components/
+│   ├── FileUpload.tsx         # Drag & drop upload, monotonic streaming progress
+│   ├── AnalysisResults.tsx    # Forensic verdict, metric dials, Grad-CAM gallery
+│   ├── Navigation.tsx         # Top bar with real-time backend connection status
+│   ├── Hero.tsx               # Header hero section
+│   ├── HowItWorks.tsx         # Step-by-step pipeline explainer
+│   └── ui/                    # Reusable shadcn/ui primitives
+├── lib/
+│   ├── api.ts                 # Resilient fallback fetch & NDJSON streaming client
+│   └── utils.ts               # Style and class merging utilities
+├── pages/
+│   ├── Index.tsx              # Main dashboard with auto-warmup trigger
+│   └── NotFound.tsx           # 404 handler
+├── App.tsx                    # Root application component
+└── main.tsx                   # React DOM entrypoint
+```
