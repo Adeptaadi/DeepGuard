@@ -728,3 +728,13 @@ If you use DeepGuard AI in academic work, please cite:
 DeepGuard: A Lightweight Dual-CNN Ensemble Framework for Deepfake Video Detection.
 
 ICCET 2026.
+
+📄 **Published Paper:** [https://ieeexplore.ieee.org/document/11581015](https://ieeexplore.ieee.org/document/11581015)
+
+---
+
+# References
+
+- **DeepGuard: A Lightweight Dual-CNN Ensemble Framework for Deepfake Video Detection**
+  Aditya Rana, Nitish Sahu, Manthan Sali, Palash Sahuji — VIT Pune, ICCET 2026
+  🔗 [https://ieeexplore.ieee.org/document/11581015](https://ieeexplore.ieee.org/document/11581015)
