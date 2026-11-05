@@ -1,23 +1,24 @@
 import torch
-from torchvision import transforms
-from PIL import Image
 import cv2
 import os
 import gc
 import numpy as np
+from torchvision import transforms
+from PIL import Image
 from facenet_pytorch import MTCNN
 from utils.model_utils import get_model
 from utils.visualize import GradCAM, overlay_heatmap
 
-# --- CONFIGURATION ---
+# Render CPU stability: cap PyTorch threads to prevent memory explosion
+torch.set_num_threads(1)
+
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # PATHS
 PATH_XCEPTION = 'models/deepfake_detector_xception.pth'
 PATH_EFFNET   = 'models/deepfake_detector_efficientnet.pth'
 
-# --- LOAD ENSEMBLE ---
-print(f"[INFO] Initializing Ensemble Engine on {DEVICE}...")
+print(f"[INFO] Initializing Ensemble Engine on {DEVICE} (threads=1)...")
 
 model_xc = get_model(model_name='xception', num_classes=2, pretrained=False)
 if os.path.exists(PATH_XCEPTION):
@@ -29,9 +30,9 @@ if os.path.exists(PATH_EFFNET):
     model_ef.load_state_dict(torch.load(PATH_EFFNET, map_location=DEVICE))
 model_ef.to(DEVICE).eval()
 
-# --- PREPROCESSING ---
+# Optimized MTCNN for 512MB RAM constraints (min_face_size=60 saves huge pyramid overhead)
 mtcnn = MTCNN(
-    image_size=299, margin=80, min_face_size=40,
+    image_size=299, margin=80, min_face_size=60,
     keep_all=False, select_largest=True,
     device=DEVICE, post_process=False 
 )
@@ -45,7 +46,7 @@ base_transform = transforms.Compose([
 
 def predict_frame_ensemble(pil_image):
     """
-    Inference on a single PIL image using the Dual-CNN ensemble.
+    Inference on a single PIL image using Dual-CNN ensemble.
     Always returns a 4-tuple: (label, confidence, img_tensor, face_crop).
     """
     if pil_image.mode != 'RGB':
@@ -70,7 +71,7 @@ def predict_frame_ensemble(pil_image):
 
     img_tensor = base_transform(face_img).unsqueeze(0).to(DEVICE)
 
-    with torch.no_grad():
+    with torch.inference_mode():
         out_xc = model_xc(img_tensor)
         prob_xc = torch.nn.functional.softmax(out_xc, dim=1)[:, 0].item()
 
@@ -85,10 +86,10 @@ def predict_frame_ensemble(pil_image):
     return label, confidence, img_tensor, face_img
 
 
-def predict_video(video_path, sequence_length=3, progress_callback=None):
+def predict_video(video_path, sequence_length=2, progress_callback=None):
     """
-    Processes video media, sampling frames across time, calculating temporal streak statistics,
-    and generating Grad-CAM heatmaps for forensic evidence.
+    Memory-efficient video inference optimized for Render 512MB RAM free tier.
+    Samples 1 keyframe per second up to 15 seconds.
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -104,22 +105,19 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
     consecutive_fake_streak = 0
     max_fake_streak = 0
     suspicious_timestamps = []
-    
-    # Evidence Collection Logic
     evidence_frames = []
-    next_capture_second = 0
     
-    # Setup GradCAM lazily
+    # Target layer for Grad-CAM
     target_layer = getattr(model_xc, 'act4', None) or getattr(model_xc, 'conv4', None)
     cam = GradCAM(model_xc, target_layer) if target_layer is not None else None
     
-    # Sample interval: sample every ~0.5s - 1.0s to remain fast & responsive on CPU
-    sample_interval = max(8, int(fps // 2)) if fps else 10
-    max_frames_to_process = 30  # Cap at 30 analyzed frames to finish within ~8-12s on Render CPU
-    estimated_target = max(1, min(max_frames_to_process, int(total_frames // sample_interval))) if total_frames > 0 else 20
+    # Sample 1 frame per second (lean, fast, avoids CPU stall)
+    sample_interval = max(15, int(fps)) if fps else 25
+    max_frames_to_process = 15  # Up to 15 seconds analyzed
+    estimated_target = max(1, min(max_frames_to_process, int(total_frames // sample_interval))) if total_frames > 0 else 10
 
     if progress_callback:
-        progress_callback(15, 0, f"Decoding video: {total_frames} frames detected at {int(fps)} FPS...")
+        progress_callback(15, 0, f"Decoding video: {total_frames} frames ({int(fps)} FPS)...")
     
     frame_idx = 0
     while True:
@@ -130,16 +128,15 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
         current_time_sec = frame_idx / fps
         
         if frame_idx % sample_interval == 0:
-            # Resize frame if large to conserve RAM & speed up MTCNN
+            # Downscale frame to 480p to keep memory well under 512MB
             h, w = frame.shape[:2]
-            if w > 960 or h > 540:
-                scale = min(960 / w, 540 / h)
+            if w > 640 or h > 360:
+                scale = min(640 / w, 360 / h)
                 frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
                 
             pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             pred_res = predict_frame_ensemble(pil_img)
             
-            # Safe unpack
             if len(pred_res) == 4:
                 label, conf, tensor, crop = pred_res
             else:
@@ -154,13 +151,13 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
                     pct = int(20 + ratio * 65)
                     stage_idx = 1 if pct < 45 else 2
                     stage_title = "Face Alignment" if stage_idx == 1 else "Dual-CNN Ensemble inference"
-                    progress_callback(pct, stage_idx, f"Processing frame {processed_frames}/{estimated_target}: {stage_title}...")
+                    progress_callback(pct, stage_idx, f"Processing {processed_frames}/{estimated_target}s: {stage_title}...")
                 
-                if label == "FAKE" and conf > 60.0:
+                if label == "FAKE" and conf > 55.0:
                     fake_frame_count += 1
                     consecutive_fake_streak += 1
                     
-                    if current_time_sec >= next_capture_second and cam is not None and len(evidence_frames) < 6:
+                    if cam is not None and len(evidence_frames) < 4:
                         try:
                             heatmap = cam.generate_heatmap(tensor, target_class_idx=0)
                             overlay = overlay_heatmap(crop, heatmap)
@@ -169,7 +166,6 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
                                 "conf": conf,
                                 "time": f"{int(current_time_sec)}s"
                             })
-                            next_capture_second += 1
                         except Exception as e:
                             print(f"[WARN] GradCAM Error: {e}")
 
@@ -182,7 +178,6 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
                     max_fake_streak = max(max_fake_streak, consecutive_fake_streak)
                     consecutive_fake_streak = 0
             
-            # Explicit reference cleanup
             del pil_img
             if tensor is not None:
                 del tensor
@@ -192,6 +187,9 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
         frame_idx += 1
         
     cap.release()
+    if cam is not None:
+        cam.remove_hooks()
+        
     gc.collect()
 
     if progress_callback:
@@ -201,13 +199,13 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
     final_prediction = "FAKE" if fake_ratio > 30.0 else "REAL"
 
     if progress_callback:
-        progress_callback(96, 3, "Computing temporal streaks & compiling forensic report...")
+        progress_callback(96, 3, "Compiling forensic dossier...")
 
     return final_prediction, {
         "fake_ratio": f"{fake_ratio:.2f}%",
-        "max_consecutive_fakes": max_fake_streak * sample_interval, 
+        "max_consecutive_fakes": max_fake_streak, 
         "timestamps": suspicious_timestamps,
-        "evidence": evidence_frames[:6],
+        "evidence": evidence_frames[:4],
         "processed_frames": processed_frames
     }
 

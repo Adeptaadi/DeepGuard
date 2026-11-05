@@ -6,6 +6,7 @@ import json
 import queue
 import threading
 import traceback
+import gc
 from io import BytesIO
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
@@ -35,7 +36,7 @@ def image_to_base64(pil_image):
     buffered = BytesIO()
     if pil_image.mode != 'RGB':
         pil_image = pil_image.convert('RGB')
-    pil_image.save(buffered, format="JPEG", quality=85)
+    pil_image.save(buffered, format="JPEG", quality=80)
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
@@ -63,9 +64,13 @@ async def analyze_video_endpoint(
     wants_stream = stream or "application/x-ndjson" in request.headers.get("accept", "")
     
     try:
-        contents = await file.read()
+        # Stream file in 512KB chunks to prevent RAM spikes on 512MB Render free tier
         with open(temp_filename, "wb") as buffer:
-            buffer.write(contents)
+            while True:
+                chunk = await file.read(512 * 1024)
+                if not chunk:
+                    break
+                buffer.write(chunk)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
@@ -122,6 +127,7 @@ async def analyze_video_endpoint(
                             os.remove(temp_filename)
                         except Exception:
                             pass
+                    gc.collect()
                     q.put(None)
 
             threading.Thread(target=run_worker, daemon=True).start()
@@ -133,7 +139,7 @@ async def analyze_video_endpoint(
                         break
                     yield json.dumps(msg) + "\n"
                 except queue.Empty:
-                    # Heartbeat keeps Cloudflare HTTP/3 QUIC connection alive
+                    # Heartbeat keeps Cloudflare HTTP/3 connection active
                     yield json.dumps({"type": "ping"}) + "\n"
 
         return StreamingResponse(
@@ -185,3 +191,4 @@ async def analyze_video_endpoint(
                 os.remove(temp_filename)
             except Exception:
                 pass
+        gc.collect()

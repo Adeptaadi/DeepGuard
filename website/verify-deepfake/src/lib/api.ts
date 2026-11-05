@@ -106,46 +106,67 @@ export async function analyzeMediaWithFallback(
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
         let finalData: any = null;
+        let streamSucceeded = false;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
 
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-            
-            let msg: any = null;
-            try {
-              msg = JSON.parse(trimmed);
-            } catch (parseErr: any) {
-              console.warn("[DeepGuard] Error parsing stream line:", parseErr);
-              continue;
-            }
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              
+              let msg: any = null;
+              try {
+                msg = JSON.parse(trimmed);
+              } catch (parseErr: any) {
+                console.warn("[DeepGuard] Error parsing stream line:", parseErr);
+                continue;
+              }
 
-            // Ignore keep-alive heartbeats
-            if (msg.type === "ping") {
-              continue;
-            }
+              // Ignore keep-alive heartbeats
+              if (msg.type === "ping") {
+                continue;
+              }
 
-            if (msg.type === "progress") {
-              onProgress?.(msg.progress, msg.stage ?? 0, msg.message ?? "");
-            } else if (msg.type === "complete") {
-              finalData = msg.data;
-            } else if (msg.type === "error") {
-              throw new Error(msg.message || "Engine reported an error during analysis");
+              if (msg.type === "progress") {
+                onProgress?.(msg.progress, msg.stage ?? 0, msg.message ?? "");
+              } else if (msg.type === "complete") {
+                finalData = msg.data;
+                streamSucceeded = true;
+              } else if (msg.type === "error") {
+                throw new Error(msg.message || "Engine reported an error during analysis");
+              }
             }
           }
+        } catch (streamReadErr) {
+          console.warn("[DeepGuard] Stream interrupted, falling back to standard REST POST:", streamReadErr);
         }
 
-        if (finalData) {
+        if (streamSucceeded && finalData) {
           onProgress?.(100, 3, "Forensic analysis complete!");
           return { data: finalData, usedUrl: baseUrl };
+        }
+
+        // Seamless REST fallback if stream was prematurely closed
+        console.info(`[DeepGuard] Stream closed without payload, attempting seamless REST fallback on ${baseUrl}...`);
+        onProgress?.(70, 2, "Compiling forensic outputs via REST engine...");
+        const restResponse = await fetch(`${baseUrl}/analyze`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (restResponse.ok) {
+          const restData = await restResponse.json();
+          onProgress?.(100, 3, "Forensic analysis complete!");
+          return { data: restData, usedUrl: baseUrl };
         } else {
-          throw new Error("Stream closed before completion payload was received");
+          const restErr = await restResponse.text();
+          throw new Error(`REST fallback failed with status ${restResponse.status}: ${restErr}`);
         }
       } else {
         // Standard JSON response
