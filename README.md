@@ -1,740 +1,387 @@
-# DeepGuard AI
+<h1 align="center">🛡️ DeepGuard AI</h1>
 
-> A Lightweight Dual-CNN Ensemble Framework for Deepfake Video Detection
+<p align="center">
+  <b>A Lightweight Dual-CNN Ensemble Framework for Deepfake Video Detection</b><br/>
+  <i>XceptionNet · EfficientNet-B0 · Grad-CAM · FastAPI · React</i>
+</p>
 
-DeepGuard AI is a full-stack deepfake detection framework designed to identify manipulated facial images and videos using a combination of computer vision, deep learning, ensemble learning, temporal aggregation, and explainable AI techniques. The system combines XceptionNet and EfficientNet-B0 to detect a wide range of deepfake artifacts including facial blending inconsistencies, boundary distortions, texture anomalies, and compression-induced manipulations.
+<p align="center">
+  <img src="https://img.shields.io/badge/Accuracy-96.25%25-brightgreen?style=for-the-badge" alt="Accuracy"/>
+  <img src="https://img.shields.io/badge/AUC--ROC-0.99-blue?style=for-the-badge" alt="AUC-ROC"/>
+  <img src="https://img.shields.io/badge/F1_Score-0.96-orange?style=for-the-badge" alt="F1 Score"/>
+  <img src="https://img.shields.io/badge/Published-IEEE_ICCET_2026-red?style=for-the-badge&logo=ieee" alt="IEEE"/>
+</p>
 
-Developed as a research-oriented project, DeepGuard aims to achieve high detection accuracy while remaining computationally efficient and deployable on consumer-grade hardware.
-
----
-
-# Authors
-
-- Aditya Rana
-- Nitish Sahu
-- Manthan Sali
-- Palash Sahuji
-
-Department of Computer Science and Engineering
-
-Vishwakarma Institute of Technology (VIT), Pune
+<p align="center">
+  📄 <a href="https://ieeexplore.ieee.org/document/11581015"><b>Read the Published Paper → IEEE Xplore</b></a>
+</p>
 
 ---
 
-# Abstract
+## 📋 Table of Contents
 
-The rapid advancement of generative artificial intelligence has enabled the creation of highly realistic deepfakes capable of manipulating facial appearance, expressions, and identity. While such technologies have legitimate applications in media generation and entertainment, they also pose serious risks including misinformation, identity theft, political manipulation, and social engineering attacks.
-
-DeepGuard AI presents a lightweight dual-CNN ensemble framework for deepfake video detection. The system combines XceptionNet and EfficientNet-B0 to capture complementary spatial and texture-based artifacts commonly introduced during deepfake generation. To improve robustness, the framework incorporates Hard Negative Mining and Temporal Aggregation techniques. Furthermore, Grad-CAM explainability is integrated to provide visual evidence supporting model decisions.
-
-The proposed framework achieves high detection accuracy while remaining deployable on consumer-grade hardware, making it suitable for practical real-world applications.
-
----
-
-# Motivation
-
-Deepfake technology has evolved rapidly in recent years due to advancements in:
-
-- Generative Adversarial Networks (GANs)
-- Autoencoders
-- Diffusion Models
-- Facial Reenactment Systems
-
-Modern deepfake generators can produce highly convincing videos that are often indistinguishable from authentic media.
-
-These manipulated videos pose significant threats:
-
-### Identity Fraud
-
-Malicious actors can impersonate individuals for financial or legal exploitation.
-
-### Misinformation
-
-Fabricated videos can be used to spread false narratives and influence public opinion.
-
-### Social Engineering
-
-Deepfake videos can enhance phishing and impersonation attacks.
-
-### Loss of Digital Trust
-
-The inability to verify media authenticity undermines confidence in digital communication.
-
-The primary goal of DeepGuard is to develop an accurate, explainable, and efficient deepfake detection framework capable of operating under practical hardware constraints.
+- [About](#-about)
+- [Key Results](#-key-results)
+- [System Architecture](#-system-architecture)
+- [Technology Stack](#-technology-stack)
+- [Dataset & Data Pipeline](#-dataset--data-pipeline)
+- [Model Architecture](#-model-architecture)
+- [Training Methodology](#-training-methodology)
+- [Inference Pipeline](#-inference-pipeline)
+- [Explainability](#-explainability-grad-cam)
+- [Project Structure](#-project-structure)
+- [Getting Started](#-getting-started)
+- [Limitations & Future Work](#-limitations--future-work)
+- [Authors](#-authors)
+- [Citation](#-citation)
 
 ---
 
-# Research Objectives
+## 🔍 About
 
-The project was designed around the following objectives:
+DeepGuard AI is a **full-stack deepfake detection framework** that identifies manipulated facial images and videos using an ensemble of deep learning models. It detects a wide range of deepfake artifacts:
 
-1. Develop a robust deepfake detection framework.
-2. Improve detection of high-quality manipulations.
-3. Minimize false positives and false negatives.
-4. Provide explainable predictions through visual evidence.
-5. Maintain computational efficiency.
-6. Enable deployment on consumer-grade hardware.
+| Artifact Type | Description |
+|---|---|
+| Facial blending seams | Visible boundaries from face-swapping |
+| Boundary distortions | Warping and geometric inconsistencies |
+| Texture anomalies | Skin tone and high-frequency irregularities |
+| Compression artifacts | Manipulation traces introduced during re-encoding |
 
----
-
-# Key Contributions
-
-### Dual-CNN Ensemble Architecture
-
-Combines XceptionNet and EfficientNet-B0 to leverage complementary feature representations.
-
-### Hard Negative Mining
-
-Improves model robustness by retraining on difficult misclassified samples.
-
-### Lightweight Temporal Aggregation
-
-Provides video-level consistency without expensive temporal networks.
-
-### Explainable AI
-
-Grad-CAM heatmaps identify regions contributing most strongly to model predictions.
-
-### Consumer Hardware Optimization
-
-Designed and optimized for NVIDIA RTX 4050 Laptop GPU (6GB VRAM).
+> **Goal:** Achieve high detection accuracy while remaining deployable on **consumer-grade hardware** (no expensive cloud GPUs required).
 
 ---
 
-# Challenges in Deepfake Detection
+## 📊 Key Results
 
-Deepfake detection presents several unique challenges:
+| Metric | Value |
+|---|---|
+| **Accuracy** | **96.25%** |
+| Precision | 94.8% |
+| F1 Score | 0.96 |
+| AUC-ROC | **0.99** |
 
-### Compression Artifacts
+### Ablation Study
 
-Most online videos undergo aggressive compression that can obscure manipulation traces.
+| Configuration | Accuracy |
+|---|---|
+| EfficientNet-B0 alone | 93.2% |
+| XceptionNet alone | 94.8% |
+| **DeepGuard Ensemble** | **96.25%** ✅ |
 
-### Generalization
-
-Models must perform well across unseen identities and manipulation techniques.
-
-### Dataset Leakage
-
-Random frame-level splitting can lead to artificially inflated validation performance.
-
-### Temporal Variability
-
-Deepfake artifacts may only appear intermittently across video frames.
-
-### Computational Constraints
-
-Many state-of-the-art approaches require expensive GPU resources.
-
-DeepGuard addresses these challenges through careful dataset preparation, ensemble learning, temporal aggregation, and hardware-aware optimization.
+> The ensemble consistently outperforms both individual architectures.
 
 ---
 
-# System Architecture
+## 🏗️ System Architecture
 
-```text
-Video/Image Input
+```
+Video / Image Input
         │
         ▼
-Frame Extraction
+  Frame Extraction  ──────────────────────────────────────────┐
+        │                                                      │
+        ▼                                               [Up to 60 frames
+  MTCNN Face Detection                                   sampled evenly]
+        │                                                      │
+        ▼                                                      │
+  Context-Aware Face Crop (margin = 80px)  ◄──────────────────┘
         │
         ▼
-MTCNN Face Detection
+  Preprocessing  →  Resize 299×299  →  Normalize [-1, 1]
         │
         ▼
-Context-Aware Face Crop
+  Test-Time Augmentation (original + horizontal flip)
         │
-        ▼
-Preprocessing
-        │
-        ▼
-Test-Time Augmentation
-        │
-        ▼
- ┌──────────────┐
- │ XceptionNet  │
- └──────────────┘
-        │
-        ▼
- ┌──────────────┐
- │ EfficientNet │
- └──────────────┘
-        │
-        ▼
- Ensemble Fusion
-        │
-        ▼
- Video Statistics
-        │
-        ▼
- Temporal Aggregation
-        │
-        ▼
- Decision Engine
-        │
-        ▼
- Grad-CAM
-        │
-        ▼
- Final Verdict
+        ├────────────────────┬──────────────────────┐
+        ▼                    ▼                      │
+  ┌─────────────┐    ┌──────────────────┐           │
+  │ XceptionNet │    │ EfficientNet-B0  │           │
+  │  (Spatial)  │    │   (Texture)      │           │
+  └──────┬──────┘    └────────┬─────────┘           │
+         │                   │                      │
+         └─────────┬─────────┘                      │
+                   ▼                                │
+            Soft Voting Ensemble                    │
+            P = (Pxception + Peff) / 2             │
+                   │                                │
+                   ▼                                │
+            Video Statistics                        │
+           (Fake Ratio · Streak)                    │
+                   │                                │
+                   ▼                                │
+          Temporal Aggregation                      │
+                   │                                │
+                   ▼                                │
+             Grad-CAM Heatmap  ◄────────────────────┘
+                   │
+                   ▼
+            ✅ Final Verdict
 ```
 
 ---
 
-# Technology Stack
+## 🛠️ Technology Stack
 
-## Deep Learning
-
-- PyTorch
-- CUDA
-- cuDNN
-- Automatic Mixed Precision (AMP)
-
-## Computer Vision
-
-- OpenCV
-- MTCNN
-- facenet-pytorch
-- Pillow
-- NumPy
-
-## Backend
-
-- FastAPI
-- Uvicorn
-- Python
-
-## Frontend
-
-- React
-- TypeScript
-- Tailwind CSS
-- Vite
-
-## Explainability
-
-- Grad-CAM
+| Layer | Tools |
+|---|---|
+| **Deep Learning** | PyTorch, CUDA, cuDNN, AMP |
+| **Computer Vision** | OpenCV, MTCNN, facenet-pytorch, Pillow, NumPy |
+| **Backend** | FastAPI, Uvicorn, Python |
+| **Frontend** | React, TypeScript, Tailwind CSS, Vite |
+| **Explainability** | Grad-CAM |
+| **Deployment** | Render (backend), Vercel (frontend) |
 
 ---
 
-# Dataset
+## 📦 Dataset & Data Pipeline
 
-## DeepFake Detection Challenge (DFDC)
+**Dataset:** [DeepFake Detection Challenge (DFDC)](https://ai.facebook.com/datasets/dfdc/)
 
-DeepGuard was trained using the DFDC dataset.
+The DFDC dataset contains thousands of real and manipulated videos including face-swapped, reenacted, and compressed internet-quality content.
 
-Characteristics:
+### Pipeline Overview
 
-- Real videos
-- Face-swapped videos
-- Facial reenactment videos
-- Compressed internet-quality videos
-
-The dataset contains thousands of manipulated and authentic videos suitable for large-scale deepfake research.
-
----
-
-# Data Preparation Pipeline
-
-## Stage 1 – Video Collection
-
-Raw videos are obtained from DFDC.
-
-Videos are categorized into:
-
-- Real
-- Fake
-
-based on provided metadata.
-
----
-
-## Stage 2 – Face Extraction
-
-DeepGuard uses MTCNN to detect faces within each frame.
-
-Configuration:
-
-```python
-margin = 80
+```
+Stage 1 ── Video Collection       (Real + Fake from DFDC)
+   │
+Stage 2 ── Face Extraction        (MTCNN, margin=80px)
+   │
+Stage 3 ── Video-Level Splitting  (prevents data leakage)
+   │
+Stage 4 ── Data Augmentation      (noise, jitter, flip, grayscale)
 ```
 
-The enlarged crop includes:
-
-- Chin
-- Forehead
-- Ears
-- Face boundaries
-
-This helps expose blending artifacts frequently missed by tighter crops.
+> ⚠️ **Why video-level splitting?** Random frame-level splits allow frames from the same video to appear in both training and validation sets, causing artificially inflated metrics. DeepGuard always keeps all frames from a single video in the same partition.
 
 ---
 
-## Stage 3 – Video-Level Splitting
+## 🧠 Model Architecture
 
-Instead of random frame splitting, DeepGuard performs:
+### XceptionNet — *Spatial Artifact Detector*
+- Uses **depthwise separable convolutions** for efficient feature extraction
+- Best at detecting: face seams, blending boundaries, warping distortions
 
-### Video-Level Split
+### EfficientNet-B0 — *Texture Artifact Detector*
+- Lightweight architecture with a high accuracy-to-parameter ratio
+- Best at detecting: skin texture anomalies, compression artifacts, high-frequency distortions
 
-All frames from a video belong to only one dataset partition.
+### Why Ensemble?
 
-Benefits:
+No single model captures all manipulation patterns. DeepGuard combines both via **Soft Voting**:
 
-- Prevents data leakage
-- Improves generalization
-- Produces realistic evaluation metrics
+$$P_{final} = \frac{P_{Xception} + P_{EfficientNet}}{2}$$
 
----
-
-## Stage 4 – Data Augmentation
-
-Training data is augmented using:
-
-- Gaussian Noise
-- Color Jitter
-- Random Grayscale
-- Horizontal Flip
-
-Purpose:
-
-- Improve robustness
-- Simulate internet-quality videos
-- Prevent overfitting
+This improves robustness, reduces variance, and raises detection accuracy.
 
 ---
 
-# Preprocessing Pipeline
+## 🏋️ Training Methodology
 
-Each detected face undergoes:
+### Stage 1 — Baseline Training
 
-### Resize
-
-```text
-299 × 299
-```
-
-### RGB Conversion
-
-Ensures consistent color representation.
-
-### Tensor Conversion
-
-Converts images into PyTorch tensors.
-
-### Normalization
-
-```python
-mean = [0.5, 0.5, 0.5]
-std  = [0.5, 0.5, 0.5]
-```
-
-Output range:
-
-```text
-[-1, 1]
-```
-
-This matches the normalization scheme used during training.
-
----
-
-# Model Architecture
-
-## XceptionNet
-
-### Purpose
-
-Detect spatial manipulation artifacts.
-
-### Detects
-
-- Face seams
-- Blending boundaries
-- Warping distortions
-- Geometric inconsistencies
-
-### Advantages
-
-- Depthwise separable convolutions
-- Lower parameter count
-- Excellent performance on deepfake datasets
-
-### Role
-
-Acts as the Spatial Artifact Detector.
-
----
-
-## EfficientNet-B0
-
-### Purpose
-
-Detect texture-based anomalies.
-
-### Detects
-
-- Skin texture inconsistencies
-- Compression artifacts
-- High-frequency distortions
-- Fine-grained manipulation traces
-
-### Advantages
-
-- Lightweight architecture
-- High accuracy-to-parameter ratio
-- Efficient inference
-
-### Role
-
-Acts as the Texture Artifact Detector.
-
----
-
-# Why Ensemble Learning?
-
-No single model captures all manipulation patterns.
-
-XceptionNet excels at:
-
-- Spatial inconsistencies
-- Boundary errors
-
-EfficientNet excels at:
-
-- Texture irregularities
-- Compression artifacts
-
-DeepGuard combines both models using Soft Voting:
-
-```math
-Pfinal = (Pxception + PefficientNet) / 2
-```
-
-Benefits:
-
-- Improved robustness
-- Better generalization
-- Reduced variance
-- Higher detection accuracy
-
----
-
-# Training Methodology
-
-## Stage 1 – Baseline Training
-
-Both models are trained independently.
-
-### Hyperparameters
-
-| Parameter | Value |
-|------------|------------|
+| Hyperparameter | Value |
+|---|---|
 | Optimizer | Adam |
 | Learning Rate | 1e-4 |
 | Batch Size | 24 |
-| Input Size | 299×299 |
-| Loss Function | Binary Cross Entropy |
+| Input Size | 299 × 299 |
+| Loss Function | Binary Cross-Entropy |
 
----
+### Stage 2 — Hard Negative Mining
 
-## Stage 2 – Hard Negative Mining
-
-High-quality deepfakes frequently bypass baseline detectors.
-
-To address this:
+High-quality deepfakes often bypass baseline detectors. The solution:
 
 1. Train baseline model
-2. Evaluate validation set
+2. Evaluate on validation set
 3. Identify misclassified fake samples
-4. Extract difficult examples
-5. Add hard negatives to training data
-6. Fine-tune models
+4. Add these **hard negatives** back to training data
+5. Fine-tune both models
 
-Benefits:
+This significantly hardens decision boundaries against challenging manipulations.
 
-- Stronger decision boundaries
-- Improved robustness
-- Better detection of challenging manipulations
+### Test-Time Augmentation (TTA)
 
----
-
-# Test-Time Augmentation (TTA)
-
-During inference, each face is evaluated twice:
-
-1. Original image
-2. Horizontally flipped image
-
-The predictions are averaged.
-
-Benefits:
-
-- Reduced prediction variance
-- Improved stability
-- Better generalization
+Each face is evaluated **twice** — once original, once horizontally flipped — and predictions are averaged. This reduces variance and improves stability.
 
 ---
 
-# Inference Pipeline
+## 🔬 Inference Pipeline
 
-When a user uploads a video:
+When a user uploads a file, the following stages execute in order:
 
-1. Video is decoded using OpenCV.
-2. Frames are extracted.
-3. Every 5th frame is sampled.
-4. MTCNN detects faces.
-5. Faces are cropped.
-6. Preprocessing is applied.
-7. Test-Time Augmentation is performed.
-8. XceptionNet generates predictions.
-9. EfficientNet generates predictions.
-10. Ensemble fusion combines outputs.
-11. Video-level statistics are computed.
-12. Temporal aggregation is applied.
-13. Grad-CAM heatmaps are generated.
-14. Final verdict is returned.
+| Step | Action |
+|---|---|
+| 1 | Decode video with OpenCV |
+| 2 | Sample every 5th frame (max 60 frames) |
+| 3 | Detect faces using MTCNN |
+| 4 | Crop faces with 80px margin |
+| 5 | Preprocess → resize, normalize |
+| 6 | Apply Test-Time Augmentation |
+| 7 | XceptionNet inference |
+| 8 | EfficientNet-B0 inference |
+| 9 | Soft-voting ensemble fusion |
+| 10 | Compute fake ratio & longest fake streak |
+| 11 | Temporal aggregation decision |
+| 12 | Generate Grad-CAM heatmap |
+| 13 | Return final verdict |
 
----
+### Temporal Aggregation
 
-# Temporal Aggregation
+Frame-level predictions can fluctuate due to noise. DeepGuard reasons at the **video level** using:
 
-Frame-level predictions can fluctuate due to noise.
+- **Fake Frame Ratio** — percentage of frames predicted as fake
+- **Longest Fake Streak** — maximum consecutive fake predictions
 
-DeepGuard performs video-level reasoning using:
-
-### Fake Frame Ratio
-
-Percentage of analyzed frames predicted as fake.
-
-### Longest Fake Streak
-
-Maximum consecutive sequence of fake predictions.
-
-Decision is based on both metrics.
-
-Advantages:
-
-- Improved stability
-- Reduced false alarms
-- Lightweight alternative to RNNs and 3D CNNs
+This provides stability without the cost of RNNs or 3D CNNs.
 
 ---
 
-# Explainable AI
+## 🔍 Explainability: Grad-CAM
 
-DeepGuard integrates Grad-CAM to improve transparency.
+DeepGuard integrates **Gradient-weighted Class Activation Mapping (Grad-CAM)** to show *why* a prediction was made.
 
-Grad-CAM highlights regions contributing most strongly to predictions.
+Highlighted regions typically include:
+- 👁️ Eyes
+- 👄 Mouth
+- 🧑 Facial boundaries and blending regions
 
-Examples:
-
-- Eyes
-- Mouth
-- Facial boundaries
-- Blending regions
-
-Benefits:
-
-- Transparency
-- User trust
-- Forensic evidence generation
-- Explainable predictions
+This builds user trust and generates forensic evidence for each prediction.
 
 ---
 
-# Experimental Results
+## 📂 Project Structure
 
-| Metric | Value |
-|----------|----------|
-| Accuracy | 96.25% |
-| Precision | 94.8% |
-| F1 Score | 0.96 |
-| AUC-ROC | 0.99 |
-
----
-
-# Ablation Study
-
-| Model | Accuracy |
-|----------|----------|
-| EfficientNet-B0 | 93.2% |
-| XceptionNet | 94.8% |
-| DeepGuard Ensemble | 96.25% |
-
-Observation:
-
-The ensemble consistently outperforms both individual architectures.
-
----
-
-# Engineering Challenges
-
-## CUDA Memory Constraints
-
-Problem:
-
-RTX 4050 limited to 6 GB VRAM.
-
-Solution:
-
-Automatic Mixed Precision Training.
-
----
-
-## Data Leakage
-
-Problem:
-
-Random frame splitting caused unrealistic validation performance.
-
-Solution:
-
-Video-level dataset splitting.
-
----
-
-## Face Cropping Blind Spots
-
-Problem:
-
-Small crops hid manipulation boundaries.
-
-Solution:
-
-Margin increased to 80 pixels.
-
----
-
-## High-Quality Deepfakes
-
-Problem:
-
-Certain manipulations bypassed baseline detectors.
-
-Solution:
-
-Hard Negative Mining.
-
----
-
-# Lessons Learned
-
-- Data quality is more important than model complexity.
-- Preventing data leakage is critical.
-- Explainability increases trust in AI systems.
-- Ensemble learning improves robustness.
-- Hard negative mining significantly improves difficult-case performance.
-- Real-world deployment requires balancing accuracy and efficiency.
-
----
-
-# Project Structure
-
-```text
-DeepfakeDetector/
-
+```
+DeepFakeDetector/
+│
 ├── backend/
-│   └── main.py
-
-├── frontend/
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.ts
-
+│   └── main.py               # FastAPI app with streaming progress endpoint
+│
+├── utils/
+│   ├── face_detector.py      # Hybrid MTCNN face detection
+│   ├── inference.py          # Dual-CNN ensemble + Grad-CAM
+│   ├── model_utils.py        # Model loading helpers
+│   └── preprocess.py         # Image preprocessing transforms
+│
+├── website/verify-deepfake/  # React + TypeScript frontend
+│   └── src/
+│       ├── components/       # UI components (FileUpload, Navigation, etc.)
+│       ├── pages/            # Page views
+│       └── lib/api.ts        # Backend communication + fallback logic
+│
 ├── models/
 │   ├── deepfake_detector_xception.pth
 │   └── deepfake_detector_efficientnet.pth
-
-├── utils/
-│   ├── face_extractor.py
-│   ├── inference.py
-│   ├── model_utils.py
-│   ├── preprocess.py
-│   └── visualize.py
-
+│
 ├── train.py
 ├── train_efficientnet.py
 ├── finetune.py
-├── prepare_finetune.py
-├── split_data_correctly.py
+├── render.yaml               # Render cloud deployment config
 └── requirements.txt
 ```
 
 ---
 
-# Running the Project
+## 🚀 Getting Started
 
-## Backend
+### Prerequisites
+
+- Python 3.9+
+- Node.js 18+
+- CUDA-compatible GPU (optional, CPU fallback available)
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Adeptaadi/DeepGuard.git
+cd DeepGuard
+```
+
+### 2. Install Python Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Start the Backend
 
 ```bash
 python -m uvicorn backend.main:app --reload
 ```
 
-Server:
+Backend runs at: `http://127.0.0.1:8000`
 
-```text
-http://127.0.0.1:8000
-```
-
----
-
-## Frontend
+### 4. Start the Frontend
 
 ```bash
-cd frontend
+cd website/verify-deepfake
 npm install
 npm run dev
 ```
 
-Frontend:
+Frontend runs at: `http://localhost:8080`
 
-```text
-http://localhost:8080
-```
+> 💡 The frontend automatically falls back to `http://127.0.0.1:8000` if the cloud backend is unavailable.
 
 ---
 
-# Current Limitations
+## ⚠️ Limitations & Future Work
 
-- Dependent on successful face detection
+### Current Limitations
+
+- Requires successful face detection to function
 - Audio deepfakes are not analyzed
 - Adversarial attacks are not explicitly handled
-- Performance evaluated primarily on DFDC
-- Does not analyze non-facial manipulations
+- Primarily evaluated on the DFDC dataset
+- Non-facial manipulations are not detected
+
+### Future Directions
+
+| Area | Description |
+|---|---|
+| Audio-Visual Detection | Fuse audio and visual streams |
+| Vision Transformers | Experiment with ViT-based architectures |
+| Frequency Domain | DCT/FFT-based artifact analysis |
+| Adversarial Robustness | Harden against adversarial perturbations |
+| Cross-Dataset Evaluation | Test generalization on FaceForensics++, Celeb-DF |
+| Real-Time Streaming | Live video stream deepfake detection |
 
 ---
 
-# Future Work
+## 👥 Authors
 
-- Audio-Visual Deepfake Detection
-- Vision Transformers (ViT)
-- Frequency Domain Analysis
-- Adversarial Robustness
-- Cross-Dataset Evaluation
-- Cloud Deployment
-- Real-Time Streaming Detection
-
----
-
-# License
-
-This project was developed for academic research, experimentation, and educational purposes.
+| Name | Institution |
+|---|---|
+| Aditya Rana | Dept. of Computer Science & Engineering, VIT Pune |
+| Nitish Sahu | Dept. of Computer Science & Engineering, VIT Pune |
+| Manthan Sali | Dept. of Computer Science & Engineering, VIT Pune |
+| Palash Sahuji | Dept. of Computer Science & Engineering, VIT Pune |
 
 ---
 
-# Citation
+## 📖 Citation
 
-If you use DeepGuard AI in academic work, please cite:
+If you use DeepGuard AI in your research, please cite:
 
-DeepGuard: A Lightweight Dual-CNN Ensemble Framework for Deepfake Video Detection.
-
-ICCET 2026.
+```bibtex
+@inproceedings{deepguard2026,
+  title     = {DeepGuard: A Lightweight Dual-CNN Ensemble Framework for Deepfake Video Detection},
+  author    = {Rana, Aditya and Sahu, Nitish and Sali, Manthan and Sahuji, Palash},
+  booktitle = {Proceedings of the International Conference on Computer Engineering and Technology (ICCET)},
+  year      = {2026},
+  url       = {https://ieeexplore.ieee.org/document/11581015}
+}
+```
 
 📄 **Published Paper:** [https://ieeexplore.ieee.org/document/11581015](https://ieeexplore.ieee.org/document/11581015)
 
 ---
 
-# References
+## 📜 License
 
-- **DeepGuard: A Lightweight Dual-CNN Ensemble Framework for Deepfake Video Detection**
-  Aditya Rana, Nitish Sahu, Manthan Sali, Palash Sahuji — VIT Pune, ICCET 2026
-  🔗 [https://ieeexplore.ieee.org/document/11581015](https://ieeexplore.ieee.org/document/11581015)
+This project was developed for academic research, experimentation, and educational purposes.
+
+---
+
+<p align="center">Made with ❤️ at <b>Vishwakarma Institute of Technology, Pune</b></p>
