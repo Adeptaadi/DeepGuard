@@ -113,10 +113,10 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
     target_layer = getattr(model_xc, 'act4', None) or getattr(model_xc, 'conv4', None)
     cam = GradCAM(model_xc, target_layer) if target_layer is not None else None
     
-    # Sample interval: sample every ~0.3s to 0.4s to be fast and memory-safe
-    sample_interval = max(5, int(fps // 3)) if fps else 8
-    max_frames_to_process = 60  # Cap at 60 analyzed frames to prevent memory spikes on Render free tier
-    estimated_target = max(1, min(max_frames_to_process, int(total_frames // sample_interval))) if total_frames > 0 else 30
+    # Sample interval: sample every ~0.5s - 1.0s to remain fast & responsive on CPU
+    sample_interval = max(8, int(fps // 2)) if fps else 10
+    max_frames_to_process = 30  # Cap at 30 analyzed frames to finish within ~8-12s on Render CPU
+    estimated_target = max(1, min(max_frames_to_process, int(total_frames // sample_interval))) if total_frames > 0 else 20
 
     if progress_callback:
         progress_callback(15, 0, f"Decoding video: {total_frames} frames detected at {int(fps)} FPS...")
@@ -130,10 +130,11 @@ def predict_video(video_path, sequence_length=3, progress_callback=None):
         current_time_sec = frame_idx / fps
         
         if frame_idx % sample_interval == 0:
-            # Resize frame if exceptionally large to conserve RAM
+            # Resize frame if large to conserve RAM & speed up MTCNN
             h, w = frame.shape[:2]
-            if w > 1280 or h > 720:
-                frame = cv2.resize(frame, (1280, int(h * (1280 / w))))
+            if w > 960 or h > 540:
+                scale = min(960 / w, 540 / h)
+                frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
                 
             pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             pred_res = predict_frame_ensemble(pil_img)

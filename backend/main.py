@@ -1,6 +1,5 @@
 import sys
 import os
-import shutil
 import time
 import base64
 import json
@@ -64,8 +63,9 @@ async def analyze_video_endpoint(
     wants_stream = stream or "application/x-ndjson" in request.headers.get("accept", "")
     
     try:
+        contents = await file.read()
         with open(temp_filename, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(contents)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
@@ -127,10 +127,14 @@ async def analyze_video_endpoint(
             threading.Thread(target=run_worker, daemon=True).start()
 
             while True:
-                msg = q.get()
-                if msg is None:
-                    break
-                yield json.dumps(msg) + "\n"
+                try:
+                    msg = q.get(timeout=1.5)
+                    if msg is None:
+                        break
+                    yield json.dumps(msg) + "\n"
+                except queue.Empty:
+                    # Heartbeat keeps Cloudflare HTTP/3 QUIC connection alive
+                    yield json.dumps({"type": "ping"}) + "\n"
 
         return StreamingResponse(
             event_generator(),

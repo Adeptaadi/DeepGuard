@@ -2,10 +2,10 @@
  * Unified Backend Engine Connector
  * 
  * Strategy:
- * 1. Checks configured environment variable (VITE_API_URL / VITE_RENDER_API_URL).
- * 2. Same-origin Vercel proxy (/api) to bypass Brave Shields & adblocker false-positives.
- * 3. Direct Render cloud backend (https://deepguard-backend-ug4e.onrender.com).
- * 4. Localhost / local development engine (http://127.0.0.1:8000).
+ * 1. Checks configured environment variable (VITE_API_URL).
+ * 2. Primary: Direct Render cloud backend (https://deepguard-backend-ug4e.onrender.com).
+ * 3. Secondary: Same-origin Vercel proxy (/api) if cross-origin is blocked.
+ * 4. Fallback: Localhost / local development engine (http://127.0.0.1:8000).
  */
 
 const DEFAULT_RENDER_URL = "https://deepguard-backend-ug4e.onrender.com";
@@ -20,17 +20,17 @@ export const getCandidateUrls = (): string[] => {
     if (!urls.includes(cleanedEnv)) urls.push(cleanedEnv);
   }
 
-  // 1. Same-origin Vercel rewrite proxy (bypasses Brave Shields & adblockers)
+  // 1. Direct Render Cloud (handles full video durations without Vercel edge timeout)
+  if (!urls.includes(DEFAULT_RENDER_URL)) {
+    urls.push(DEFAULT_RENDER_URL);
+  }
+
+  // 2. Same-origin Vercel rewrite proxy
   if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
     const sameOriginApi = `${window.location.origin}/api`;
     if (!urls.includes(sameOriginApi)) {
       urls.push(sameOriginApi);
     }
-  }
-  
-  // 2. Direct Render Cloud
-  if (!urls.includes(DEFAULT_RENDER_URL)) {
-    urls.push(DEFAULT_RENDER_URL);
   }
 
   // 3. Fallback: Localhost
@@ -44,8 +44,7 @@ export const getCandidateUrls = (): string[] => {
 export type ProgressCallback = (progress: number, stageIdx: number, message: string) => void;
 
 /**
- * Sends media to the backend, attempting same-origin proxy, Render Cloud, and Localhost in order.
- * Supports real-time streaming progress (NDJSON) so progress maps directly to the active AI process.
+ * Sends media to the backend with automatic streaming & REST failover across candidate endpoints.
  */
 export async function analyzeMediaWithFallback(
   formData: FormData,
@@ -56,26 +55,37 @@ export async function analyzeMediaWithFallback(
 
   for (const baseUrl of candidateUrls) {
     try {
-      console.info(`[DeepGuard Engine] Attempting inference connection at: ${baseUrl}/analyze?stream=true`);
+      console.info(`[DeepGuard Engine] Initiating forensic analysis at: ${baseUrl}`);
       
       const controller = new AbortController();
-      // 3-minute timeout to allow for video upload + neural inference + Render CPU processing
+      // 3-minute timeout to allow video upload + neural inference + Render CPU processing
       const timeoutId = setTimeout(() => {
-        try {
-          controller.abort();
-        } catch (_) {}
+        try { controller.abort(); } catch (_) {}
       }, 180000);
 
       onProgress?.(10, 0, "Transmitting media to inference engine...");
 
-      const response = await fetch(`${baseUrl}/analyze?stream=true`, {
-        method: "POST",
-        body: formData,
-        headers: {
-          "Accept": "application/x-ndjson, application/json",
-        },
-        signal: controller.signal,
-      });
+      let response: Response | null = null;
+      let isStreaming = true;
+
+      try {
+        response = await fetch(`${baseUrl}/analyze?stream=true`, {
+          method: "POST",
+          body: formData,
+          headers: {
+            "Accept": "application/x-ndjson, application/json",
+          },
+          signal: controller.signal,
+        });
+      } catch (streamErr) {
+        console.warn(`[DeepGuard] Stream fetch failed on ${baseUrl}, trying standard REST POST:`, streamErr);
+        isStreaming = false;
+        response = await fetch(`${baseUrl}/analyze`, {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+      }
 
       clearTimeout(timeoutId);
 
@@ -87,8 +97,8 @@ export async function analyzeMediaWithFallback(
 
       const contentType = response.headers.get("content-type") || "";
 
-      // If streaming response (NDJSON)
-      if (contentType.includes("ndjson") || contentType.includes("stream")) {
+      // Handle NDJSON stream
+      if (isStreaming && (contentType.includes("ndjson") || contentType.includes("stream"))) {
         if (!response.body) {
           throw new Error("ReadableStream not supported by browser response");
         }
@@ -116,6 +126,11 @@ export async function analyzeMediaWithFallback(
               continue;
             }
 
+            // Ignore keep-alive heartbeats
+            if (msg.type === "ping") {
+              continue;
+            }
+
             if (msg.type === "progress") {
               onProgress?.(msg.progress, msg.stage ?? 0, msg.message ?? "");
             } else if (msg.type === "complete") {
@@ -133,7 +148,7 @@ export async function analyzeMediaWithFallback(
           throw new Error("Stream closed before completion payload was received");
         }
       } else {
-        // Standard JSON fallback
+        // Standard JSON response
         onProgress?.(85, 2, "Processing neural outputs & heatmaps...");
         const data = await response.json();
         onProgress?.(100, 3, "Forensic analysis complete!");
@@ -164,8 +179,7 @@ export async function analyzeMediaWithFallback(
 }
 
 /**
- * Wakes up the Render backend immediately when the user lands on the website.
- * Tries the same-origin proxy first, then direct Render, then Localhost.
+ * Wakes up the backend immediately when the user lands on the website.
  */
 export async function warmUpBackend(): Promise<{ status: "online" | "waking_up"; url?: string }> {
   const candidateUrls = getCandidateUrls();
@@ -189,9 +203,7 @@ export async function warmUpBackend(): Promise<{ status: "online" | "waking_up";
         console.info(`[DeepGuard Engine] Instant Warmup Success from ${baseUrl}:`, data);
         return { status: "online", url: baseUrl };
       }
-    } catch (_) {
-      // Warmup ping quietly attempts candidates in background
-    }
+    } catch (_) {}
   }
   return { status: "waking_up" };
 }
